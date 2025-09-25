@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSupabaseRouteClient } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic"; // evita cache en prod
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(req) {
   try {
