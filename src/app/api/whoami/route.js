@@ -1,10 +1,8 @@
-import { NextResponse } from "next/server";
-import { getSupabaseRouteClient } from "@/lib/supabaseServer";
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const dynamic = "force-dynamic";
+import { NextResponse } from "next/server";
+import { getSupabaseRouteClient } from "@/lib/supabaseServer";
 
 export async function GET() {
   const supabase = getSupabaseRouteClient();
