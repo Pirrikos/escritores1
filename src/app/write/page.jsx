@@ -86,8 +86,4 @@ export default function WritePage() {
         </>
       )}
     </main>
-  );
-}
-
-// Forzar a tratar el fichero como módulo, por si alguna herramienta se atasca:
-export {};
+  )
