@@ -1,21 +1,20 @@
-import { NextResponse } from "next/server";
-import { getSupabaseRouteClient } from "@/lib/supabaseServer";
-
-export const dynamic = "force-dynamic"; // evita cache en prod
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+import { NextResponse } from "next/server";
+import { getSupabaseRouteClient } from "@/lib/supabaseServer";
 
 export async function POST(req) {
   try {
     const supabase = getSupabaseRouteClient();
 
-    // 1) Usuario
+    // 1) Sesión
     const { data: userData, error: userErr } = await supabase.auth.getUser();
     if (userErr) return NextResponse.json({ code:"AUTH_GET_USER_ERROR", error:userErr.message }, { status: 500 });
     const user = userData?.user;
     if (!user) return NextResponse.json({ code:"NO_AUTH", error:"No autenticado" }, { status: 401 });
 
-    // 2) Body
+    // 2) Datos
     const body = await req.json().catch(() => ({}));
     const title = (body.title || "").trim();
     const content = (body.content || "").trim();
