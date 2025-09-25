@@ -14,7 +14,7 @@ export default function WritePage() {
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
-  }, []);
+  }, [supabase]);
 
   const signInWithGoogle = async () => {
     setMsg("");
@@ -41,11 +41,17 @@ export default function WritePage() {
       });
 
       const ct = res.headers.get("content-type") || "";
-      const payload = ct.includes("application/json") ? await res.json() : { error: await res.text() };
+      const payload = ct.includes("application/json")
+        ? await res.json()
+        : { error: await res.text() };
 
-      if (!res.ok) return setMsg(`Error ${res.status}: ${payload.error || "Fallo al guardar"}`);
+      if (!res.ok) {
+        setMsg(`Error ${res.status}: ${payload.error || "Fallo al guardar"}`);
+        return;
+      }
 
-      setTitle(""); setContent("");
+      setTitle("");
+      setContent("");
       setMsg(`Guardado: ${payload.data.title}`);
     } catch (err) {
       setMsg(`Error de red: ${String(err)}`);
@@ -55,7 +61,9 @@ export default function WritePage() {
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 16, display: "grid", gap: 12 }}>
       <h1>Escribir</h1>
-      <p style={{fontSize:12,opacity:0.7}}>Sesión: {session ? `OK (${session.user?.email})` : "NO"}</p>
+      <p style={{ fontSize: 12, opacity: 0.7 }}>
+        Sesión: {session ? `OK (${session.user?.email})` : "NO"}
+      </p>
 
       {!session ? (
         <div style={{ display: "grid", gap: 8 }}>
@@ -69,12 +77,25 @@ export default function WritePage() {
             <button onClick={signOut}>Salir</button>
           </div>
 
-          <form onSubmit={publish} style={{ display: "grid", gap: 8, border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
-            <input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="Título" required />
-            <textarea value={content} onChange={(e)=>setContent(e.target.value)} placeholder="Contenido" rows={5} />
+          <form
+            onSubmit={publish}
+            style={{ display: "grid", gap: 8, border: "1px solid #eee", padding: 12, borderRadius: 8 }}
+          >
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Título"
+              required
+            />
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Contenido"
+              rows={5}
+            />
             <label>
               Estado:&nbsp;
-              <select value={status} onChange={(e)=>setStatus(e.target.value)}>
+              <select value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="draft">Borrador</option>
                 <option value="published">Publicado</option>
               </select>
@@ -86,4 +107,5 @@ export default function WritePage() {
         </>
       )}
     </main>
-  )
+  );
+}
