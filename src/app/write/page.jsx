@@ -46,7 +46,7 @@ export default function WritePage() {
       const res = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content, status, type }),
+        body: JSON.stringify({ title, content, status }),
       });
 
       const ct = res.headers.get("content-type") || "";
@@ -64,7 +64,7 @@ export default function WritePage() {
       setContent("");
       setStatus("draft");
       setType("poem");
-      setMsg(`Guardado: ${payload.data.title}`);
+      setMsg(`Guardado: ${payload.post?.title || "Post sin título"}`);
     } catch (err) {
       setMsg(`Error de red: ${String(err)}`);
     } finally {
