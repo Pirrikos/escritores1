@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getSupabaseBrowserClient } from "@/lib/supabaseClient";
-
+import { getSupabaseBrowserClient } from "../../lib/supabaseClient";
 export default function WritePage() {
   const supabase = getSupabaseBrowserClient();
   const [session, setSession] = useState(null);
