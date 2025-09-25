@@ -29,4 +29,44 @@ export async function POST(req) {
     const content = (body.content || "").trim();
     const status = body.status === "published" ? "published" : "draft";
 
-    // 👇 MUY IMPORTANTE: usar un valor permitido por tu CHECK
+    // Validación básica
+    if (!title || !content) {
+      return NextResponse.json({ 
+        code: "VALIDATION_ERROR", 
+        error: "Título y contenido son requeridos" 
+      }, { status: 400 });
+    }
+
+    // Insertar el post
+    const { data: post, error: insertErr } = await supabase
+      .from("posts")
+      .insert({
+        title,
+        content,
+        status,
+        author_id: user.id
+      })
+      .select()
+      .single();
+
+    if (insertErr) {
+      return NextResponse.json({ 
+        code: "POST_INSERT_ERROR", 
+        error: insertErr.message, 
+        details: insertErr.details 
+      }, { status: 500 });
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      post 
+    }, { status: 201 });
+
+  } catch (error) {
+    console.error("Error en POST /api/posts:", error);
+    return NextResponse.json({ 
+      code: "INTERNAL_ERROR", 
+      error: "Error interno del servidor" 
+    }, { status: 500 });
+  }
+}
