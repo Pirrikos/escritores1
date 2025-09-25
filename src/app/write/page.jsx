@@ -4,6 +4,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "../../lib/supabaseClient";
 
+import { Button, Input, Textarea } from "@/components/ui";
+
 export default function WritePage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [session, setSession] = useState(null);
@@ -80,40 +82,52 @@ export default function WritePage() {
 
       {!session ? (
         <div style={{ display: "grid", gap: 8 }}>
-          <button onClick={signInWithGoogle}>Entrar con Google</button>
+          <Button onClick={signInWithGoogle}>Entrar con Google</Button>
           {msg && <p>{msg}</p>}
         </div>
       ) : (
         <>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <span>Conectado</span>
-            <button onClick={signOut}>Salir</button>
+            <Button variant="outline" size="sm" onClick={signOut}>Salir</Button>
           </div>
 
           <form
             onSubmit={publish}
             style={{ display: "grid", gap: 8, border: "1px solid #eee", padding: 12, borderRadius: 8 }}
           >
-            <input
+            <Input
+              label="Título"
+              type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Título"
+              placeholder="Escribe el título de tu post..."
+              fullWidth
               required
             />
-            <textarea
+            <Textarea
+              label="Contenido"
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Contenido"
-              rows={5}
+              placeholder="Escribe el contenido de tu post..."
+              rows={10}
+              fullWidth
+              required
             />
 
-            <label>
-              Estado:&nbsp;
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Estado:
+              </label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              >
                 <option value="draft">Borrador</option>
                 <option value="published">Publicado</option>
               </select>
-            </label>
+            </div>
 
             <label>
               Tipo:&nbsp;
@@ -123,7 +137,13 @@ export default function WritePage() {
               </select>
             </label>
 
-            <button disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button>
+            <Button 
+              type="submit" 
+              disabled={saving}
+              loading={saving}
+            >
+              {saving ? "Guardando..." : "Guardar"}
+            </Button>
           </form>
 
           {msg && <p>{msg}</p>}
