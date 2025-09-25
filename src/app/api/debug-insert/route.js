@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
-import { getSupabaseRouteClient } from "@/lib/supabaseServer";
-
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+import { NextResponse } from "next/server";
+import { getSupabaseRouteClient } from "../../../lib/supabaseServer";
 
 export async function GET() {
   const supabase = getSupabaseRouteClient();
@@ -18,10 +19,15 @@ export async function GET() {
       content: "Inserción de prueba",
       status: "published",
       published_at: new Date().toISOString(),
+      type: "post", // 🔑
+      // slug: "debug-"+Date.now(), // descomenta solo si existe 'slug'
     })
-    .select("id,title,status,published_at")
+    .select("id,title,status,published_at,type")
     .single();
 
-  if (error) return NextResponse.json({ ok:false, error: error.message, details: error.details, hint: error.hint }, { status: 500 });
+  if (error) return NextResponse.json(
+    { ok:false, code:error.code, error:error.message, details:error.details, hint:error.hint },
+    { status: 500 }
+  );
   return NextResponse.json({ ok:true, data }, { status: 201 });
 }
