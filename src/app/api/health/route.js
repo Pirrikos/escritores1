@@ -11,6 +11,8 @@ import {
 } from "../../../lib/errorHandler";
 import { securityLogger } from "../../../lib/securityLogger";
 import { monitoring } from "../../../lib/monitoring";
+import { performHealthCheck, quickHealthCheck, readinessCheck, HEALTH_STATUS } from '../../../lib/healthCheck.js';
+import productionLogger, { LOG_CATEGORIES } from '../../../lib/productionLogger.js';
 
 // Health check configuration
 const HEALTH_CONFIG = {
@@ -20,9 +22,77 @@ const HEALTH_CONFIG = {
 };
 
 export async function GET(request) {
-  return withErrorHandling(async (req) => {
+  return withErrorHandling(async (request) => {
+    const url = new URL(request.url);
+    const checkType = url.searchParams.get('type') || 'full';
+
+    let healthData;
+    let statusCode = 200;
+
+    switch (checkType) {
+      case 'liveness':
+        healthData = quickHealthCheck();
+        break;
+      
+      case 'readiness':
+        healthData = await readinessCheck();
+        if (healthData.status !== HEALTH_STATUS.HEALTHY) {
+          statusCode = 503; // Service Unavailable
+        }
+        break;
+      
+      case 'legacy':
+        // Keep legacy health check for backward compatibility
+        return await legacyHealthCheck(request);
+      
+      case 'full':
+      default:
+        healthData = await performHealthCheck();
+        
+        // Set appropriate status code based on health
+        switch (healthData.status) {
+          case HEALTH_STATUS.CRITICAL:
+            statusCode = 503; // Service Unavailable
+            break;
+          case HEALTH_STATUS.UNHEALTHY:
+            statusCode = 503; // Service Unavailable
+            break;
+          case HEALTH_STATUS.DEGRADED:
+            statusCode = 200; // OK but with warnings
+            break;
+          case HEALTH_STATUS.HEALTHY:
+          default:
+            statusCode = 200; // OK
+            break;
+        }
+        break;
+    }
+
+    // Log health check request
+    productionLogger.info(LOG_CATEGORIES.API, 'Health check requested', {
+      type: checkType,
+      status: healthData.status,
+      responseTime: healthData.responseTime,
+      userAgent: request.headers.get('user-agent'),
+      ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+    });
+
+    return NextResponse.json(healthData, { 
+      status: statusCode,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+  })(request);
+}
+
+// Legacy health check function for backward compatibility
+async function legacyHealthCheck(request) {
+  try {
     const startTime = Date.now();
-    const supabase = getSupabaseRouteClient();
+    const supabase = await getSupabaseRouteClient();
     const checks = {};
     let overallStatus = 'healthy';
     let hasWarnings = false;
@@ -238,8 +308,19 @@ export async function GET(request) {
       version: process.env.npm_package_version || '1.0.0',
       checks
     }, { status: statusCode });
-
-  })(request);
+    
+  } catch (error) {
+    productionLogger.error(LOG_CATEGORIES.API, 'Health check error', {
+      error: error.message,
+      stack: error.stack
+    });
+    
+    return NextResponse.json({
+      status: 'error',
+      message: 'Health check failed',
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
+  }
 }
 
 // Helper function to format uptime in human-readable format

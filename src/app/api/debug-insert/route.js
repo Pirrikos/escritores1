@@ -29,7 +29,7 @@ export async function GET(request) {
       );
     }
     
-    const supabase = getSupabaseRouteClient();
+    const supabase = await getSupabaseRouteClient();
     
     // Verify user authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();

@@ -1,9 +1,10 @@
 import { cookies } from "next/headers";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 
-export function getSupabaseRouteClient() {
+export async function getSupabaseRouteClient() {
+  const cookieStore = await cookies();
   return createRouteHandlerClient(
-    { cookies },
+    { cookies: () => cookieStore },
     {
       supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
       supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -12,6 +13,6 @@ export function getSupabaseRouteClient() {
 }
 
 // Alias para compatibilidad con el sistema de backup
-export function createServerSupabaseClient() {
-  return getSupabaseRouteClient();
+export async function createServerSupabaseClient() {
+  return await getSupabaseRouteClient();
 }

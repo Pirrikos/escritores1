@@ -278,83 +278,142 @@ export default function WritePage() {
     }
     
     setSaving(true);
-    try {
-      // Sanitizar datos antes de enviar
-      const sanitizedTitle = sanitizeText(title.trim());
-      const sanitizedContent = normalizeText(sanitizeText(content.trim()));
-      
-      // Validación final antes del envío
-      if (!sanitizedTitle || !sanitizedContent) {
-        setMsg("❌ Error: Los datos no pudieron ser procesados correctamente");
-        return;
-      }
-      
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "X-Requested-With": "XMLHttpRequest" // Header adicional de seguridad
-        },
-        body: JSON.stringify({ 
-          title: sanitizedTitle, 
-          content: sanitizedContent, 
-          status, 
-          type 
-        }),
-      });
-
-      const ct = res.headers.get("content-type") || "";
-      const payload = ct.includes("application/json")
-        ? await res.json()
-        : { error: await res.text() };
-
-      if (!res.ok) {
-        const errorMessage = payload.error || "Fallo al guardar";
-        setMsg(`Error ${res.status}: ${errorMessage}`);
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    const attemptPublish = async () => {
+      try {
+        // Sanitizar datos antes de enviar
+        const sanitizedTitle = sanitizeText(title.trim());
+        const sanitizedContent = normalizeText(sanitizeText(content.trim()));
         
-        // Si es un error de validación del servidor, mostrar detalles
-        if (res.status === 400 && payload.details) {
-          setErrors(payload.details);
+        // Validación final antes del envío
+        if (!sanitizedTitle || !sanitizedContent) {
+          setMsg("❌ Error: Los datos no pudieron ser procesados correctamente");
+          return false;
         }
         
-        // Si es un error de rate limiting, mostrar información específica
-        if (res.status === 429) {
-          const retryAfter = res.headers.get('Retry-After');
-          if (retryAfter) {
-            setMsg(`❌ Demasiadas solicitudes. Intenta de nuevo en ${retryAfter} segundos.`);
+        const res = await fetch("/api/posts", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest" // Header adicional de seguridad
+          },
+          body: JSON.stringify({ 
+            title: sanitizedTitle, 
+            content: sanitizedContent, 
+            status, 
+            type 
+          }),
+        });
+
+        const ct = res.headers.get("content-type") || "";
+        const payload = ct.includes("application/json")
+          ? await res.json()
+          : { error: await res.text() };
+
+        if (!res.ok) {
+          const errorMessage = payload.error || "Fallo al guardar";
+          
+          // Manejo específico de diferentes tipos de errores
+          switch (res.status) {
+            case 400:
+              setMsg(`❌ Error de validación: ${errorMessage}`);
+              if (payload.details) {
+                setErrors(payload.details);
+              }
+              return false; // No reintentar errores de validación
+              
+            case 401:
+              setMsg("❌ Sesión expirada. Por favor, inicia sesión nuevamente.");
+              await signOut();
+              return false;
+              
+            case 403:
+              setMsg("❌ No tienes permisos para realizar esta acción.");
+              return false;
+              
+            case 429:
+              const retryAfter = res.headers.get('Retry-After');
+              if (retryAfter) {
+                setMsg(`❌ Demasiadas solicitudes. Intenta de nuevo en ${retryAfter} segundos.`);
+                // Auto-retry después del tiempo especificado
+                if (retryCount < maxRetries) {
+                  setTimeout(() => {
+                    retryCount++;
+                    setMsg(`🔄 Reintentando... (${retryCount}/${maxRetries})`);
+                    attemptPublish();
+                  }, parseInt(retryAfter) * 1000);
+                }
+              }
+              return false;
+              
+            case 500:
+            case 502:
+            case 503:
+            case 504:
+              // Errores del servidor - reintentar
+              if (retryCount < maxRetries) {
+                retryCount++;
+                setMsg(`🔄 Error del servidor. Reintentando... (${retryCount}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+                return attemptPublish();
+              } else {
+                setMsg(`❌ Error del servidor persistente: ${errorMessage}`);
+                return false;
+              }
+              
+            default:
+              setMsg(`❌ Error ${res.status}: ${errorMessage}`);
+              return false;
           }
         }
-        
-        return;
-      }
 
-      // Reset del formulario y estados
-      setTitle("");
-      setContent("");
-      setStatus("draft");
-      setType("poem");
-      setErrors({});
-      setTouched({});
-      setMsg(`✅ Guardado exitosamente: "${payload.data.title}"`);
-      
-      // Log de éxito para auditoría
-      console.log('Post creado exitosamente:', {
-        id: payload.data.id,
-        title: payload.data.title,
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (err) {
-      console.error("Error al guardar:", err);
-      
-      // Diferentes mensajes según el tipo de error
-      if (err.name === 'TypeError' && err.message.includes('fetch')) {
-        setMsg(`❌ Error de conexión: Verifica tu conexión a internet`);
-      } else if (err.name === 'AbortError') {
-        setMsg(`❌ La solicitud fue cancelada. Intenta de nuevo.`);
-      } else {
-        setMsg(`❌ Error inesperado: ${err.message || "No se pudo conectar con el servidor"}`);
+        // Reset del formulario y estados
+        setTitle("");
+        setContent("");
+        setStatus("draft");
+        setType("poem");
+        setErrors({});
+        setTouched({});
+        setMsg(`✅ Guardado exitosamente: "${payload.data.title}"`);
+        
+        // Log de éxito para auditoría
+        console.log('Post creado exitosamente:', {
+          id: payload.data.id,
+          title: payload.data.title,
+          timestamp: new Date().toISOString()
+        });
+        
+        return true;
+        
+      } catch (err) {
+        console.error("Error al guardar:", err);
+        
+        // Diferentes mensajes según el tipo de error
+        if (err.name === 'TypeError' && err.message.includes('fetch')) {
+          if (retryCount < maxRetries) {
+            retryCount++;
+            setMsg(`🔄 Error de conexión. Reintentando... (${retryCount}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return attemptPublish();
+          } else {
+            setMsg(`❌ Error de conexión persistente: Verifica tu conexión a internet`);
+          }
+        } else if (err.name === 'AbortError') {
+          setMsg(`❌ La solicitud fue cancelada. Intenta de nuevo.`);
+        } else if (err.message.includes('JSON')) {
+          setMsg(`❌ Error de formato de respuesta del servidor`);
+        } else {
+          setMsg(`❌ Error inesperado: ${err.message || "No se pudo conectar con el servidor"}`);
+        }
+        
+        return false;
       }
+    };
+    
+    try {
+      await attemptPublish();
     } finally {
       setSaving(false);
     }

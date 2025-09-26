@@ -17,6 +17,8 @@ import {
   handleAuthError,
   ERROR_CODES 
 } from '@/lib/errorHandler';
+import productionLogger, { LOG_CATEGORIES } from '@/lib/productionLogger';
+import { PerformanceTimer } from '@/lib/performanceMonitor';
 
 // Tablas permitidas para backup
 const ALLOWED_TABLES = ['posts', 'profiles', 'follows', 'works'];
@@ -26,52 +28,103 @@ const ALLOWED_TABLES = ['posts', 'profiles', 'follows', 'works'];
  */
 export async function GET(request) {
   return withErrorHandling(async () => {
-    const supabase = createServerSupabaseClient();
-    const { searchParams } = new URL(request.url);
-    const action = searchParams.get('action');
-    const table = searchParams.get('table');
+    // Iniciar monitoreo de rendimiento
+    const performanceTimer = new PerformanceTimer('api_backup_get', {
+      method: 'GET',
+      endpoint: '/api/backup',
+      userAgent: request.headers.get('user-agent')
+    });
 
-    // Verificar autenticación y permisos de admin
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return handleAuthError(authError || new Error('No autenticado'));
-    }
+    try {
+      const supabase = createServerSupabaseClient();
+      const { searchParams } = new URL(request.url);
+      const action = searchParams.get('action');
+      const table = searchParams.get('table');
 
-    // Verificar rol de administrador
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
+      productionLogger.info('Backup GET request started', LOG_CATEGORIES.API, {
+        action,
+        table,
+        userAgent: request.headers.get('user-agent'),
+        ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+      });
 
-    if (!profile || profile.role !== 'admin') {
-      return createErrorResponse(
-        'Acceso denegado',
-        403,
-        ERROR_CODES.FORBIDDEN,
-        { requiredRole: 'admin', userRole: profile?.role }
-      );
-    }
-
-    switch (action) {
-      case 'statistics':
-        const stats = getBackupStatistics();
-        return NextResponse.json({
-          success: true,
-          data: stats
+      // Verificar autenticación y permisos de admin
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        productionLogger.error('Authentication failed in backup endpoint', LOG_CATEGORIES.AUTH, {
+          error: authError?.message,
+          endpoint: '/api/backup'
         });
+        return handleAuthError(authError || new Error('No autenticado'));
+      }
 
-      case 'list':
-      default:
-        const backups = listBackups(table);
-        return NextResponse.json({
-          success: true,
-          data: {
-            backups,
-            total: backups.length,
-            tables: ALLOWED_TABLES
-          }
+      // Verificar rol de administrador
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile || profile.role !== 'admin') {
+        productionLogger.warn('Unauthorized backup access attempt', LOG_CATEGORIES.SECURITY, {
+          userId: user.id,
+          userRole: profile?.role,
+          requiredRole: 'admin'
         });
+        return createErrorResponse(
+          'Acceso denegado',
+          403,
+          ERROR_CODES.FORBIDDEN,
+          { requiredRole: 'admin', userRole: profile?.role }
+        );
+      }
+
+      productionLogger.info('Admin backup access granted', LOG_CATEGORIES.USER_ACTION, {
+        userId: user.id,
+        action: 'backup_access',
+        requestedAction: action,
+        table
+      });
+
+      switch (action) {
+        case 'statistics':
+          const stats = getBackupStatistics();
+          productionLogger.info('Backup statistics retrieved', LOG_CATEGORIES.SYSTEM, {
+            userId: user.id,
+            statsCount: Object.keys(stats).length
+          });
+          performanceTimer.end();
+          return NextResponse.json({
+            success: true,
+            data: stats
+          });
+
+        case 'list':
+        default:
+          const backups = listBackups(table);
+          productionLogger.info('Backup list retrieved', LOG_CATEGORIES.SYSTEM, {
+            userId: user.id,
+            table,
+            backupCount: backups.length
+          });
+          performanceTimer.end();
+          return NextResponse.json({
+            success: true,
+            data: {
+              backups,
+              total: backups.length,
+              tables: ALLOWED_TABLES
+            }
+          });
+      }
+    } catch (error) {
+      performanceTimer.end();
+      productionLogger.error('Unexpected error in backup GET endpoint', LOG_CATEGORIES.API, {
+        error: error.message,
+        stack: error.stack,
+        endpoint: '/api/backup'
+      });
+      throw error;
     }
   });
 }

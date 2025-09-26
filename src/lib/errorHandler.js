@@ -2,7 +2,7 @@
 // Centralized error handling and standardized response codes
 
 import { NextResponse } from 'next/server';
-import { logAPIError, logDatabaseError, logValidationError } from './securityLogger.js';
+import securityLogger from './securityLogger.js';
 import { logCriticalError, CRITICAL_ERROR_TYPES, SEVERITY_LEVELS } from './monitoring';
 
 // Standardized error codes
@@ -187,7 +187,7 @@ export function handleDatabaseError(dbError, operation = 'unknown', context = {}
   }
   
   // Log the database error
-  logDatabaseError(dbError, context.table || 'unknown', operation, {
+  securityLogger.logDatabaseError(dbError, context.table || 'unknown', {
     ...context,
     errorCode: dbError.code,
     errorMessage: dbError.message
@@ -222,7 +222,7 @@ export function handleValidationError(validationErrors, context = {}) {
   const errors = Array.isArray(validationErrors) ? validationErrors : [validationErrors];
   
   // Log validation errors
-  logValidationError('input_validation', 'Validation failed', errors, context);
+  securityLogger.logValidation('input_validation', 'Validation failed', errors, context);
   
   return createErrorResponse(
     ERROR_CODES.VALIDATION_ERROR,
@@ -250,7 +250,7 @@ export function handleAuthError(authError, context = {}) {
   }
   
   // Log authentication error
-  logAPIError(authError, context.endpoint || 'unknown', context.method || 'unknown', {
+  securityLogger.logAPIError(authError, context.endpoint || 'unknown', context.method || 'unknown', {
     ...context,
     errorType: 'authentication'
   });
@@ -310,7 +310,7 @@ export function handleRateLimitError(rateLimitInfo, context = {}) {
  */
 export function handleInternalError(error, context = {}) {
   // Log internal error
-  logAPIError(error, context.endpoint || 'unknown', context.method || 'unknown', {
+  securityLogger.logAPIError(error, context.endpoint || 'unknown', context.method || 'unknown', {
     ...context,
     errorType: 'internal'
   });
