@@ -2,3 +2,4 @@
 export { Button } from './Button';
 export { default as Input } from './Input';
 export { default as Textarea } from './Textarea';
+export { Icon, Icons } from './Icon';

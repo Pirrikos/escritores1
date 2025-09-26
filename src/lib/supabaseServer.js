@@ -10,3 +10,8 @@ export function getSupabaseRouteClient() {
     }
   );
 }
+
+// Alias para compatibilidad con el sistema de backup
+export function createServerSupabaseClient() {
+  return getSupabaseRouteClient();
+}

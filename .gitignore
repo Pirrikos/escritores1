@@ -40,3 +40,46 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 !.env.example
+
+# Supabase
+supabase/.temp/
+supabase/.branches/
+supabase/config.toml
+
+# Logs and monitoring
+logs/
+*.log
+security-*.log
+monitoring-*.log
+
+# Backup files
+backups/
+*.backup
+*.bak
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/
+
+# Database files (if any local db files)
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache directories
+.cache/
+.parcel-cache/

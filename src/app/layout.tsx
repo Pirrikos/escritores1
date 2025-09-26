@@ -1,6 +1,15 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import ErrorBoundary from "@/components/ErrorBoundary";
+
+// Inicializar sistema de backup en el servidor
+if (typeof window === 'undefined') {
+  // Importación dinámica para evitar problemas en el cliente
+  import('@/lib/backupInitializer').catch(error => {
+    console.error('Error importando inicializador de backup:', error);
+  });
+}
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,7 +36,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
       </body>
     </html>
   );
