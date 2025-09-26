@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
 
-export default function AuthCallback() {
+function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = getSupabaseBrowserClient();
@@ -23,47 +23,40 @@ export default function AuthCallback() {
           console.log('Código de autorización encontrado:', code);
           setStatus('Intercambiando código por sesión...');
           
-          // Intercambiar el código por una sesión
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          // Usar getSession() que maneja automáticamente el flujo PKCE
+          const { data, error } = await supabase.auth.getSession();
           
           if (error) {
-            console.error('Error al intercambiar código por sesión:', error);
-            setStatus('Error en autenticación');
-            setTimeout(() => {
-              router.push('/auth/login?error=auth_callback_error');
-            }, 2000);
-            return;
+            console.error('Error al obtener sesión:', error);
+            // Intentar manejar el callback manualmente
+            const { data: authData, error: authError } = await supabase.auth.getUser();
+            if (authError) {
+              console.error('Error al obtener usuario:', authError);
+              setStatus('Error en autenticación');
+              setTimeout(() => {
+                router.push('/auth/login?error=auth_callback_error');
+              }, 2000);
+              return;
+            }
           }
           
-          if (data.session && data.user) {
-            console.log('Sesión establecida exitosamente:', data.user.email);
-            setStatus(`Sesión establecida para ${data.user.email}`);
+          // Verificar si tenemos una sesión válida
+          const { data: sessionData } = await supabase.auth.getSession();
+          
+          if (sessionData.session && sessionData.session.user) {
+            console.log('Sesión establecida exitosamente:', sessionData.session.user.email);
+            setStatus(`Sesión establecida para ${sessionData.session.user.email}`);
             
-            // Esperar un momento para que la sesión se propague
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            setStatus('Redirigiendo al panel de administración...');
             
-            // Verificar que la sesión persiste
-            const { data: sessionCheck } = await supabase.auth.getSession();
-            console.log('Verificación de sesión:', sessionCheck.session?.user?.email);
+            // Obtener la URL de redirección guardada
+            const redirectUrl = localStorage.getItem('redirectAfterLogin');
+            localStorage.removeItem('redirectAfterLogin');
             
-            if (sessionCheck.session) {
-              setStatus('Redirigiendo al panel de administración...');
-              
-              // Obtener la URL de redirección guardada
-              const redirectUrl = localStorage.getItem('redirectAfterLogin');
-              localStorage.removeItem('redirectAfterLogin');
-              
-              // Redirigir a la URL guardada o al admin por defecto
-              router.push(redirectUrl || '/admin');
-            } else {
-              console.error('La sesión no persiste después del intercambio');
-              setStatus('Error: La sesión no persiste');
-              setTimeout(() => {
-                router.push('/auth/login?error=session_persistence_error');
-              }, 2000);
-            }
+            // Redirigir a la URL guardada o al admin por defecto
+            router.push(redirectUrl || '/admin');
           } else {
-            console.error('No se pudo establecer la sesión');
+            console.error('No se pudo establecer la sesión después del callback');
             setStatus('Error: No se pudo establecer la sesión');
             setTimeout(() => {
               router.push('/auth/login?error=session_error');
@@ -96,5 +89,24 @@ export default function AuthCallback() {
         <p className="text-sm text-gray-500">{status}</p>
       </div>
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Cargando...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function AuthCallback() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <AuthCallbackContent />
+    </Suspense>
   );
 }
