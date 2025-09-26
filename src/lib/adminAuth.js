@@ -7,11 +7,16 @@ const ADMIN_EMAIL = 'proyectoenigmatico@gmail.com';
  * @returns {boolean} - true si es admin
  */
 export function isAdminUser(session) {
+  console.log('Verificando admin para sesión:', session?.user?.email);
+  
   if (!session || !session.user || !session.user.email) {
+    console.log('No hay sesión válida');
     return false;
   }
   
-  return session.user.email === ADMIN_EMAIL;
+  const isAdmin = session.user.email === ADMIN_EMAIL;
+  console.log(`¿Es admin ${session.user.email}?`, isAdmin);
+  return isAdmin;
 }
 
 /**

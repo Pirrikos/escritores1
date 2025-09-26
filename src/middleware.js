@@ -35,11 +35,11 @@ const securityHeaders = {
 // Enhanced rate limiting configuration with different limits per endpoint type
 const rateLimitStore = new Map();
 const RATE_LIMIT_CONFIGS = {
-  default: { window: 60 * 1000, maxRequests: 100 }, // 100 requests per minute
-  api: { window: 60 * 1000, maxRequests: 60 },      // 60 API requests per minute
-  auth: { window: 60 * 1000, maxRequests: 10 },     // 10 auth requests per minute
-  upload: { window: 60 * 1000, maxRequests: 5 },    // 5 upload requests per minute
-  sensitive: { window: 60 * 1000, maxRequests: 3 }  // 3 sensitive operations per minute
+  default: { window: 60 * 1000, maxRequests: 200 }, // 200 requests per minute
+  api: { window: 60 * 1000, maxRequests: 120 },     // 120 API requests per minute
+  auth: { window: 60 * 1000, maxRequests: 30 },     // 30 auth requests per minute
+  upload: { window: 60 * 1000, maxRequests: 15 },   // 15 upload requests per minute
+  sensitive: { window: 60 * 1000, maxRequests: 20 } // 20 sensitive operations per minute
 };
 
 /**

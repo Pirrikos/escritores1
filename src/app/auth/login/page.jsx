@@ -11,7 +11,9 @@ export default function LoginPage() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
+  const [signingUp, setSigningUp] = useState(false);
   const [message, setMessage] = useState("");
+  const [isRegistering, setIsRegistering] = useState(false);
 
   useEffect(() => {
     // Verificar sesión actual
@@ -21,13 +23,15 @@ export default function LoginPage() {
       
       // Si ya está autenticado, redirigir
       if (data.session) {
+        console.log('Sesión encontrada:', data.session.user.email);
         handleRedirectAfterLogin();
       }
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      console.log('Auth state change:', event, s?.user?.email);
       setSession(s);
-      if (s) {
+      if (s && event === 'SIGNED_IN') {
         handleRedirectAfterLogin();
       }
     });
@@ -52,17 +56,51 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { 
-          redirectTo: `${window.location.origin}/auth/login`
+          redirectTo: `${window.location.origin}/`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          }
         },
       });
       
       if (error) {
+        console.error('Error en signInWithGoogle:', error);
         setMessage(`Error: ${error.message}`);
       }
     } catch (error) {
+      console.error('Error inesperado en signInWithGoogle:', error);
       setMessage(`Error inesperado: ${error.message}`);
     } finally {
       setSigningIn(false);
+    }
+  };
+
+  const signUpWithGoogle = async () => {
+    setSigningUp(true);
+    setMessage("");
+    
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { 
+          redirectTo: `${window.location.origin}/`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          }
+        },
+      });
+      
+      if (error) {
+        console.error('Error en signUpWithGoogle:', error);
+        setMessage(`Error: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error inesperado en signUpWithGoogle:', error);
+      setMessage(`Error inesperado: ${error.message}`);
+    } finally {
+      setSigningUp(false);
     }
   };
 
@@ -102,9 +140,14 @@ export default function LoginPage() {
       <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-8">
         <div className="text-center mb-8">
           <div className="text-blue-600 text-6xl mb-4">🔐</div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Iniciar Sesión</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {isRegistering ? "Crear Cuenta" : "Iniciar Sesión"}
+          </h1>
           <p className="text-gray-600">
-            Accede al panel de administración
+            {isRegistering 
+              ? "Crea una cuenta para acceder al panel de administración" 
+              : "Accede al panel de administración"
+            }
           </p>
         </div>
 
@@ -116,11 +159,11 @@ export default function LoginPage() {
 
         <div className="space-y-4">
           <Button
-            onClick={signInWithGoogle}
-            disabled={signingIn}
+            onClick={isRegistering ? signUpWithGoogle : signInWithGoogle}
+            disabled={signingIn || signingUp}
             className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 shadow-sm"
           >
-            {signingIn ? (
+            {(signingIn || signingUp) ? (
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900"></div>
             ) : (
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -130,8 +173,23 @@ export default function LoginPage() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
             )}
-            {signingIn ? "Iniciando sesión..." : "Continuar con Google"}
+            {(signingIn || signingUp) 
+              ? (isRegistering ? "Creando cuenta..." : "Iniciando sesión...") 
+              : (isRegistering ? "Crear cuenta con Google" : "Continuar con Google")
+            }
           </Button>
+
+          <div className="text-center">
+            <button
+              onClick={() => setIsRegistering(!isRegistering)}
+              className="text-sm text-blue-600 hover:text-blue-800 transition-colors font-medium"
+            >
+              {isRegistering 
+                ? "¿Ya tienes cuenta? Inicia sesión" 
+                : "¿No tienes cuenta? Regístrate"
+              }
+            </button>
+          </div>
 
           <div className="text-center">
             <button

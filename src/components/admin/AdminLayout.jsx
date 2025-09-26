@@ -56,7 +56,13 @@ export default function AdminLayout({ children, activeTab = 'dashboard' }) {
             </div>
 
             <div className="flex items-center space-x-4">
-              {/* Header vacío - sin botones */}
+              <button
+                onClick={handleSignOut}
+                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all duration-200"
+              >
+                <Icon path={Icons.logout} size="md" />
+                <span>Cerrar Sesión</span>
+              </button>
             </div>
           </div>
         </div>
