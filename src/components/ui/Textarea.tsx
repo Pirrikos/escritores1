@@ -1,94 +1,166 @@
-import React, { forwardRef } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { cn } from '@/lib/utils';
 
-interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   error?: string;
   helperText?: string;
-  variant?: 'default' | 'filled' | 'outlined';
+  autoResize?: boolean;
+  minRows?: number;
+  maxRows?: number;
   fullWidth?: boolean;
-  resize?: 'none' | 'vertical' | 'horizontal' | 'both';
+  loading?: boolean;
+  required?: boolean;
 }
 
-const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ 
-    label, 
-    error, 
-    helperText, 
-    variant = 'default', 
+const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
+  ({
+    className,
+    label,
+    error,
+    helperText,
+    autoResize = false,
+    minRows = 3,
+    maxRows = 10,
     fullWidth = false,
-    resize = 'vertical',
-    className = '', 
-    ...props 
+    loading = false,
+    required = false,
+    disabled,
+    id,
+    onChange,
+    value,
+    ...props
   }, ref) => {
-    const baseClasses = `
-      px-3 py-2 text-sm transition-colors duration-200
-      border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-      disabled:opacity-50 disabled:cursor-not-allowed
-      min-h-[80px]
-    `;
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const generatedId = React.useId();
+    const inputId = id || generatedId;
+    const errorId = `${inputId}-error`;
+    const helperTextId = `${inputId}-helper`;
+    
+    const baseStyles = 'flex min-h-[80px] w-full rounded-md border bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none transition-colors duration-200';
+    
+    const stateStyles = error 
+      ? 'border-red-500 focus:ring-red-500 focus-visible:ring-red-500' 
+      : 'border-gray-300 focus:ring-blue-500 focus-visible:ring-blue-500';
 
-    const variantClasses = {
-      default: `
-        border-gray-300 bg-white text-gray-900
-        hover:border-gray-400 focus:border-blue-500
-        dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100
-        dark:hover:border-gray-500 dark:focus:border-blue-400
-      `,
-      filled: `
-        border-transparent bg-gray-100 text-gray-900
-        hover:bg-gray-200 focus:bg-white focus:border-blue-500
-        dark:bg-gray-700 dark:text-gray-100
-        dark:hover:bg-gray-600 dark:focus:bg-gray-800 dark:focus:border-blue-400
-      `,
-      outlined: `
-        border-2 border-gray-300 bg-transparent text-gray-900
-        hover:border-gray-400 focus:border-blue-500
-        dark:border-gray-600 dark:text-gray-100
-        dark:hover:border-gray-500 dark:focus:border-blue-400
-      `
+    const isDisabled = disabled || loading;
+
+    // Auto-resize functionality
+    const adjustHeight = () => {
+      const textarea = textareaRef.current;
+      if (!textarea || !autoResize) return;
+
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto';
+      
+      // Calculate the new height
+      const scrollHeight = textarea.scrollHeight;
+      const lineHeight = parseInt(getComputedStyle(textarea).lineHeight);
+      const minHeight = lineHeight * minRows;
+      const maxHeight = lineHeight * maxRows;
+      
+      // Set the new height within bounds
+      const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
+      textarea.style.height = `${newHeight}px`;
     };
 
-    const resizeClasses = {
-      none: 'resize-none',
-      vertical: 'resize-y',
-      horizontal: 'resize-x',
-      both: 'resize'
+    // Handle change with auto-resize
+    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      if (onChange) {
+        onChange(e);
+      }
+      adjustHeight();
     };
 
-    const errorClasses = error ? `
-      border-red-500 focus:border-red-500 focus:ring-red-500
-      dark:border-red-400 dark:focus:border-red-400 dark:focus:ring-red-400
-    ` : '';
+    // Adjust height on value change
+    useEffect(() => {
+      adjustHeight();
+    }, [value, autoResize]);
 
-    const widthClasses = fullWidth ? 'w-full' : '';
-
-    const textareaClasses = `
-      ${baseClasses}
-      ${variantClasses[variant]}
-      ${errorClasses}
-      ${widthClasses}
-      ${resizeClasses[resize]}
-      ${className}
-    `.replace(/\s+/g, ' ').trim();
+    // Adjust height on mount
+    useEffect(() => {
+      adjustHeight();
+    }, []);
 
     return (
-      <div className={fullWidth ? 'w-full' : ''}>
+      <div className={cn('space-y-2', fullWidth && 'w-full')}>
         {label && (
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label
+            htmlFor={inputId}
+            className={cn(
+              "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+              error && "text-red-700"
+            )}
+          >
             {label}
+            {required && <span className="text-red-500 ml-1" aria-label="required">*</span>}
           </label>
         )}
-        <textarea
-          ref={ref}
-          className={textareaClasses}
-          {...props}
-        />
+        
+        <div className="relative">
+          <textarea
+            className={cn(
+              baseStyles,
+              stateStyles,
+              loading && 'cursor-wait',
+              className
+            )}
+            ref={(node) => {
+              textareaRef.current = node;
+              if (typeof ref === 'function') {
+                ref(node);
+              } else if (ref) {
+                ref.current = node;
+              }
+            }}
+            id={inputId}
+            disabled={isDisabled}
+            onChange={handleChange}
+            value={value}
+            aria-invalid={error ? 'true' : 'false'}
+            aria-describedby={cn(
+              error && errorId,
+              helperText && helperTextId
+            )}
+            aria-required={required}
+            {...props}
+          />
+          
+          {loading && (
+            <div className="absolute right-3 top-3 h-4 w-4" aria-hidden="true">
+              <svg
+                className="animate-spin h-4 w-4 text-gray-500"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            </div>
+          )}
+        </div>
+        
         {(error || helperText) && (
-          <p className={`mt-1 text-xs ${
-            error 
-              ? 'text-red-600 dark:text-red-400' 
-              : 'text-gray-500 dark:text-gray-400'
-          }`}>
+          <p 
+            id={error ? errorId : helperTextId}
+            className={cn(
+              'text-sm',
+              error ? 'text-red-600' : 'text-gray-600'
+            )}
+            role={error ? 'alert' : undefined}
+          >
             {error || helperText}
           </p>
         )}

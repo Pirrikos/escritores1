@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabaseServer';
 import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler';
-import { securityLogger, SECURITY_EVENTS, SECURITY_LEVELS } from '@/lib/securityLogger';
+import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from '@/lib/securityLogger';
 import { withRateLimit } from '@/lib/rateLimiter';
 
 async function POST(request) {
   try {
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
     
     // Verificar autenticación
     const { data: { session }, error: authError } = await supabase.auth.getSession();
@@ -44,7 +44,14 @@ async function POST(request) {
 
     if (queryError) {
       console.error('Error consultando posts recientes:', queryError);
-      securityLogger.logAPIError(queryError, '/api/posts/rate-limit-check', 'POST', { userId });
+      // Usar el método log correcto
+      securityLogger.log(SECURITY_EVENTS.API_ERROR, SECURITY_LEVELS.WARNING, {
+        errorMessage: queryError.message,
+        errorStack: queryError.stack,
+        endpoint: '/api/posts/rate-limit-check',
+        method: 'POST',
+        userId
+      });
       return createErrorResponse(
         ERROR_CODES.INTERNAL_ERROR,
         'Error al verificar rate limit'
@@ -70,8 +77,11 @@ async function POST(request) {
       const oldestPost = new Date(recentPosts[recentPosts.length - 1].created_at);
       resetTime = Math.max(0, (oldestPost.getTime() + 5 * 60 * 1000 - Date.now()) / 1000);
       
-      // Log rate limit exceeded
-      securityLogger.logRateLimit(userId, '/api/posts', postCount, {
+      // Log rate limit exceeded usando el método log correcto
+      securityLogger.log(SECURITY_EVENTS.RATE_LIMIT_EXCEEDED, SECURITY_LEVELS.WARNING, {
+        userId,
+        endpoint: '/api/posts',
+        currentCount: postCount,
         maxAllowed: maxPosts,
         resetTime: Math.ceil(resetTime)
       });
@@ -92,7 +102,18 @@ async function POST(request) {
 
   } catch (error) {
     console.error('Error en rate-limit-check:', error);
-    securityLogger.logAPIError(error, '/api/posts/rate-limit-check', 'POST');
+    // Usar función de logging directa en lugar del método de instancia
+    try {
+      securityLogger.log(SECURITY_EVENTS.API_ERROR, SECURITY_LEVELS.WARNING, {
+        errorMessage: error.message,
+        errorStack: error.stack,
+        endpoint: '/api/posts/rate-limit-check',
+        method: 'POST',
+        statusCode: error.statusCode || 500
+      });
+    } catch (logError) {
+      console.error('Error logging security event:', logError);
+    }
     return createErrorResponse(
       ERROR_CODES.INTERNAL_ERROR,
       'Error interno del servidor'
@@ -100,8 +121,7 @@ async function POST(request) {
   }
 }
 
-// Aplicar rate limiting para consultas de rate limit
-const POST_WITH_RATE_LIMIT = withRateLimit('API_GENERAL')(POST);
-
-export { POST_WITH_RATE_LIMIT as POST };
+// Aplicar rate limiting y error handling
+const rateLimitedPOST = withRateLimit('API_GENERAL')(POST);
+export { rateLimitedPOST as POST };
 export default withErrorHandling(POST);

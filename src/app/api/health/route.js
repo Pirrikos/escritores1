@@ -9,7 +9,7 @@ import {
   createErrorResponse,
   ERROR_CODES 
 } from "../../../lib/errorHandler";
-import { securityLogger } from "../../../lib/securityLogger";
+import securityLogger from "../../../lib/securityLogger";
 import { monitoring } from "../../../lib/monitoring";
 import { performHealthCheck, quickHealthCheck, readinessCheck, HEALTH_STATUS } from '../../../lib/healthCheck.js';
 import productionLogger, { LOG_CATEGORIES } from '../../../lib/productionLogger.js';

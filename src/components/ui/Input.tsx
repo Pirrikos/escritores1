@@ -1,83 +1,131 @@
-import React, { forwardRef } from 'react';
+import React from 'react';
+import { cn } from '@/lib/utils';
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   helperText?: string;
-  variant?: 'default' | 'filled' | 'outlined';
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
   fullWidth?: boolean;
+  loading?: boolean;
+  required?: boolean;
 }
 
-const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ 
-    label, 
-    error, 
-    helperText, 
-    variant = 'default', 
-    fullWidth = false, 
-    className = '', 
-    ...props 
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({
+    className,
+    type = 'text',
+    label,
+    error,
+    helperText,
+    leftIcon,
+    rightIcon,
+    fullWidth = false,
+    loading = false,
+    required = false,
+    disabled,
+    id,
+    ...props
   }, ref) => {
-    const baseClasses = `
-      px-3 py-2 text-sm transition-colors duration-200
-      border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-      disabled:opacity-50 disabled:cursor-not-allowed
-    `;
-
-    const variantClasses = {
-      default: `
-        border-gray-300 bg-white text-gray-900
-        hover:border-gray-400 focus:border-blue-500
-        dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100
-        dark:hover:border-gray-500 dark:focus:border-blue-400
-      `,
-      filled: `
-        border-transparent bg-gray-100 text-gray-900
-        hover:bg-gray-200 focus:bg-white focus:border-blue-500
-        dark:bg-gray-700 dark:text-gray-100
-        dark:hover:bg-gray-600 dark:focus:bg-gray-800 dark:focus:border-blue-400
-      `,
-      outlined: `
-        border-2 border-gray-300 bg-transparent text-gray-900
-        hover:border-gray-400 focus:border-blue-500
-        dark:border-gray-600 dark:text-gray-100
-        dark:hover:border-gray-500 dark:focus:border-blue-400
-      `
-    };
-
-    const errorClasses = error ? `
-      border-red-500 focus:border-red-500 focus:ring-red-500
-      dark:border-red-400 dark:focus:border-red-400 dark:focus:ring-red-400
-    ` : '';
-
-    const widthClasses = fullWidth ? 'w-full' : '';
-
-    const inputClasses = `
-      ${baseClasses}
-      ${variantClasses[variant]}
-      ${errorClasses}
-      ${widthClasses}
-      ${className}
-    `.replace(/\s+/g, ' ').trim();
+    const generatedId = React.useId();
+    const inputId = id || generatedId;
+    const errorId = `${inputId}-error`;
+    const helperTextId = `${inputId}-helper`;
+    
+    const baseStyles = 'flex h-10 w-full rounded-md border bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200';
+    
+    const stateStyles = error 
+      ? 'border-red-500 focus:ring-red-500 focus-visible:ring-red-500' 
+      : 'border-gray-300 focus:ring-blue-500 focus-visible:ring-blue-500';
+    
+    const iconPadding = leftIcon ? 'pl-10' : rightIcon || loading ? 'pr-10' : '';
+    const isDisabled = disabled || loading;
 
     return (
-      <div className={fullWidth ? 'w-full' : ''}>
+      <div className={cn('space-y-2', fullWidth && 'w-full')}>
         {label && (
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label
+            htmlFor={inputId}
+            className={cn(
+              "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+              error && "text-red-700"
+            )}
+          >
             {label}
+            {required && <span className="text-red-500 ml-1" aria-label="required">*</span>}
           </label>
         )}
-        <input
-          ref={ref}
-          className={inputClasses}
-          {...props}
-        />
+        
+        <div className="relative">
+          {leftIcon && (
+            <div className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" aria-hidden="true">
+              {leftIcon}
+            </div>
+          )}
+          
+          <input
+            type={type}
+            className={cn(
+              baseStyles,
+              stateStyles,
+              iconPadding,
+              loading && 'cursor-wait',
+              className
+            )}
+            ref={ref}
+            id={inputId}
+            disabled={isDisabled}
+            aria-invalid={error ? 'true' : 'false'}
+            aria-describedby={cn(
+              error && errorId,
+              helperText && helperTextId
+            )}
+            aria-required={required}
+            {...props}
+          />
+          
+          {loading && (
+            <div className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" aria-hidden="true">
+              <svg
+                className="animate-spin h-4 w-4 text-gray-500"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            </div>
+          )}
+          
+          {!loading && rightIcon && (
+            <div className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" aria-hidden="true">
+              {rightIcon}
+            </div>
+          )}
+        </div>
+        
         {(error || helperText) && (
-          <p className={`mt-1 text-xs ${
-            error 
-              ? 'text-red-600 dark:text-red-400' 
-              : 'text-gray-500 dark:text-gray-400'
-          }`}>
+          <p 
+            id={error ? errorId : helperTextId}
+            className={cn(
+              'text-sm',
+              error ? 'text-red-600' : 'text-gray-600'
+            )}
+            role={error ? 'alert' : undefined}
+          >
             {error || helperText}
           </p>
         )}

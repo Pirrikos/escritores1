@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "../../lib/supabaseClient";
 import { sanitizeText, normalizeText } from '@/lib/sanitization';
 import { validatePost, validateUserInput, VALIDATION_LIMITS, VALIDATION_ERRORS } from '@/lib/databaseValidation';
-import { Button, Input, Textarea } from "@/components/ui";
+import { Button, Input, Textarea, Select, Card, CardHeader, CardBody } from "@/components/ui";
 
 export default function WritePage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -313,12 +313,35 @@ export default function WritePage() {
           : { error: await res.text() };
 
         if (!res.ok) {
-          const errorMessage = payload.error || "Fallo al guardar";
+          // Extraer el mensaje de error correctamente
+          let errorMessage = "Fallo al guardar";
+          
+          if (payload.error) {
+            // Si payload.error es un objeto, extraer el mensaje
+            if (typeof payload.error === 'object') {
+              errorMessage = payload.error.message || payload.error.error || JSON.stringify(payload.error);
+            } else {
+              errorMessage = payload.error;
+            }
+          }
           
           // Manejo específico de diferentes tipos de errores
           switch (res.status) {
             case 400:
-              setMsg(`❌ Error de validación: ${errorMessage}`);
+              // Para errores de validación, mostrar detalles específicos
+              if (payload.error && payload.error.details && payload.error.details.validationErrors) {
+                const validationErrors = payload.error.details.validationErrors;
+                const errorMessages = validationErrors.map(err => {
+                  if (typeof err === 'object') {
+                    return err.message || err.error || 'Error de validación';
+                  }
+                  return err;
+                }).join(', ');
+                setMsg(`❌ Error de validación: ${errorMessages}`);
+              } else {
+                setMsg(`❌ Error de validación: ${errorMessage}`);
+              }
+              
               if (payload.details) {
                 setErrors(payload.details);
               }
@@ -420,143 +443,145 @@ export default function WritePage() {
   };
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 16, display: "grid", gap: 12 }}>
-      <h1 style={{ margin: 0 }}>Escribir</h1>
+    <main className="max-w-3xl mx-auto p-4 space-y-3">
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 m-0">Escribir</h1>
 
-      <p style={{ fontSize: 12, opacity: 0.7 }}>
+      <p className="text-xs text-gray-500 dark:text-gray-400">
         Sesión: {session ? `OK (${session.user?.email})` : "NO"}
       </p>
 
       {!session ? (
-        <div style={{ display: "grid", gap: 8 }}>
-          <Button onClick={signInWithGoogle}>Entrar con Google</Button>
-          {msg && <p>{msg}</p>}
-        </div>
+        <Card>
+          <CardBody>
+            <div className="space-y-2">
+              <Button onClick={signInWithGoogle} fullWidth>Entrar con Google</Button>
+              {msg && <p className="text-sm text-gray-600">{msg}</p>}
+            </div>
+          </CardBody>
+        </Card>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span>Conectado</span>
-            <Button variant="outline" size="sm" onClick={signOut}>Salir</Button>
-          </div>
-
-          <form
-            onSubmit={publish}
-            style={{ display: "grid", gap: 8, border: "1px solid #eee", padding: 12, borderRadius: 8 }}
-          >
-            <Input
-              label="Título"
-              type="text"
-              value={title}
-              onChange={handleTitleChange}
-              onBlur={() => handleBlur('title')}
-              placeholder="Escribe el título de tu post..."
-              fullWidth
-              required
-              error={errors.title}
-              maxLength={VALIDATION_LIMITS.TITLE_MAX_LENGTH}
-            />
-            <Textarea
-              label="Contenido"
-              value={content}
-              onChange={handleContentChange}
-              onBlur={() => handleBlur('content')}
-              placeholder="Escribe el contenido de tu post..."
-              rows={10}
-              fullWidth
-              required
-              error={errors.content}
-              maxLength={VALIDATION_LIMITS.CONTENT_MAX_LENGTH}
-            />
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Estado:
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-              >
-                <option value="draft">Borrador</option>
-                <option value="published">Publicado</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Tipo:
-              </label>
-              <select 
-                value={type} 
-                onChange={(e) => setType(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-              >
-                <option value="poem">Poema</option>
-                <option value="chapter">Capítulo</option>
-              </select>
-            </div>
-
-            {/* Mostrar errores generales */}
-            {errors.general && (
-              <div style={{ 
-                padding: '8px 12px', 
-                borderRadius: '4px', 
-                backgroundColor: '#fee', 
-                color: '#c33',
-                border: '1px solid #fcc',
-                fontSize: '14px'
-              }}>
-                {errors.general}
+          <Card variant="outlined">
+            <CardBody>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-green-600 font-medium">Conectado</span>
+                <Button variant="outline" size="sm" onClick={signOut}>Salir</Button>
               </div>
-            )}
+            </CardBody>
+          </Card>
 
-            <Button 
-              type="submit" 
-              disabled={saving || isValidating || Object.keys(errors).length > 0}
-              loading={saving || isValidating}
-            >
-              {saving ? "Guardando..." : isValidating ? "Validando..." : "Guardar"}
-            </Button>
-            
-            {/* Mostrar contadores de caracteres con colores según límites */}
-            <div style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ 
-                color: title.length > VALIDATION_LIMITS.TITLE_MAX_LENGTH * 0.9 ? '#e74c3c' : 
-                       title.length > VALIDATION_LIMITS.TITLE_MAX_LENGTH * 0.7 ? '#f39c12' : '#666' 
-              }}>
-                Título: {title.length}/{VALIDATION_LIMITS.TITLE_MAX_LENGTH}
-              </span>
-              <span style={{ 
-                color: content.length > VALIDATION_LIMITS.CONTENT_MAX_LENGTH * 0.9 ? '#e74c3c' : 
-                       content.length > VALIDATION_LIMITS.CONTENT_MAX_LENGTH * 0.7 ? '#f39c12' : '#666' 
-              }}>
-                Contenido: {content.length}/{VALIDATION_LIMITS.CONTENT_MAX_LENGTH}
-              </span>
-            </div>
-            
-            {/* Indicador de validación en tiempo real */}
-            {isValidating && (
-              <div style={{ 
-                fontSize: '12px', 
-                color: '#3498db', 
-                textAlign: 'center',
-                padding: '4px'
-              }}>
-                🔍 Validando contenido...
-              </div>
-            )}
-          </form>
+          <Card>
+            <CardHeader title="Crear nuevo post" />
+            <CardBody>
+              <form onSubmit={publish} className="space-y-4">
+                <Input
+                  label="Título"
+                  type="text"
+                  value={title}
+                  onChange={handleTitleChange}
+                  onBlur={() => handleBlur('title')}
+                  placeholder="Escribe el título de tu post..."
+                  fullWidth
+                  required
+                  error={errors.title}
+                  maxLength={VALIDATION_LIMITS.TITLE_MAX_LENGTH}
+                />
+                
+                <Textarea
+                  label="Contenido"
+                  value={content}
+                  onChange={handleContentChange}
+                  onBlur={() => handleBlur('content')}
+                  placeholder="Escribe el contenido de tu post..."
+                  rows={10}
+                  fullWidth
+                  required
+                  error={errors.content}
+                  maxLength={VALIDATION_LIMITS.CONTENT_MAX_LENGTH}
+                />
+
+                <Select
+                  label="Estado"
+                  value={status}
+                  onChange={(value) => setStatus(value)}
+                  options={[
+                    { value: "draft", label: "Borrador" },
+                    { value: "published", label: "Publicado" }
+                  ]}
+                  fullWidth
+                />
+
+                <Select
+                  label="Tipo"
+                  value={type}
+                  onChange={(value) => setType(value)}
+                  options={[
+                    { value: "poem", label: "Poema" },
+                    { value: "chapter", label: "Capítulo" }
+                  ]}
+                  fullWidth
+                />
+
+                {/* Mostrar errores generales */}
+                {errors.general && (
+                  <Card variant="outlined" className="border-red-200 bg-red-50">
+                    <CardBody>
+                      <p className="text-red-700 text-sm">{errors.general}</p>
+                    </CardBody>
+                  </Card>
+                )}
+
+                <Button 
+                  type="submit" 
+                  disabled={saving || isValidating || Object.keys(errors).length > 0}
+                  loading={saving || isValidating}
+                  fullWidth
+                >
+                  {saving ? "Guardando..." : isValidating ? "Validando..." : "Guardar"}
+                </Button>
+                
+                {/* Mostrar contadores de caracteres con colores según límites */}
+                <div className="flex justify-between text-xs">
+                  <span className={
+                    title.length > VALIDATION_LIMITS.TITLE_MAX_LENGTH * 0.9 ? 'text-red-500' : 
+                    title.length > VALIDATION_LIMITS.TITLE_MAX_LENGTH * 0.7 ? 'text-yellow-500' : 'text-gray-500'
+                  }>
+                    Título: {title.length}/{VALIDATION_LIMITS.TITLE_MAX_LENGTH}
+                  </span>
+                  <span className={
+                    content.length > VALIDATION_LIMITS.CONTENT_MAX_LENGTH * 0.9 ? 'text-red-500' : 
+                    content.length > VALIDATION_LIMITS.CONTENT_MAX_LENGTH * 0.7 ? 'text-yellow-500' : 'text-gray-500'
+                  }>
+                    Contenido: {content.length}/{VALIDATION_LIMITS.CONTENT_MAX_LENGTH}
+                  </span>
+                </div>
+                
+                {/* Indicador de validación en tiempo real */}
+                {isValidating && (
+                  <div className="text-xs text-blue-500 text-center py-1">
+                    🔍 Validando contenido...
+                  </div>
+                )}
+              </form>
+            </CardBody>
+          </Card>
 
           {msg && (
-            <div style={{ 
-              padding: '12px', 
-              borderRadius: '6px', 
-              backgroundColor: msg.includes('✅') ? '#d4edda' : msg.includes('❌') ? '#f8d7da' : '#fff3cd',
-              color: msg.includes('✅') ? '#155724' : msg.includes('❌') ? '#721c24' : '#856404',
-              border: `1px solid ${msg.includes('✅') ? '#c3e6cb' : msg.includes('❌') ? '#f5c6cb' : '#ffeaa7'}`
-            }}>
-              {msg}
-            </div>
+            <Card variant="outlined" className={
+              msg.includes('✅') ? 'border-green-200 bg-green-50' : 
+              msg.includes('❌') ? 'border-red-200 bg-red-50' : 
+              'border-yellow-200 bg-yellow-50'
+            }>
+              <CardBody>
+                <p className={
+                  msg.includes('✅') ? 'text-green-700' : 
+                  msg.includes('❌') ? 'text-red-700' : 
+                  'text-yellow-700'
+                }>
+                  {msg}
+                </p>
+              </CardBody>
+            </Card>
           )}
         </>
       )}

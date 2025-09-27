@@ -34,17 +34,17 @@ export const isValidUUID = (uuid) => {
  */
 export const validateStringLength = (str, min = 0, max = Infinity) => {
   if (typeof str !== 'string') {
-    return { isValid: false, error: 'Value must be a string' };
+    return { isValid: false, error: 'El valor debe ser una cadena de texto' };
   }
   
   const trimmed = str.trim();
   
   if (trimmed.length < min) {
-    return { isValid: false, error: `Must be at least ${min} characters long` };
+    return { isValid: false, error: `Debe tener al menos ${min} caracteres` };
   }
   
   if (trimmed.length > max) {
-    return { isValid: false, error: `Must not exceed ${max} characters` };
+    return { isValid: false, error: `No debe exceder ${max} caracteres` };
   }
   
   return { isValid: true, value: trimmed };
@@ -61,15 +61,15 @@ export const validateNumber = (value, min = -Infinity, max = Infinity) => {
   const num = Number(value);
   
   if (isNaN(num)) {
-    return { isValid: false, error: 'Must be a valid number' };
+    return { isValid: false, error: 'Debe ser un número válido' };
   }
   
   if (num < min) {
-    return { isValid: false, error: `Must be at least ${min}` };
+    return { isValid: false, error: `Debe ser al menos ${min}` };
   }
   
   if (num > max) {
-    return { isValid: false, error: `Must not exceed ${max}` };
+    return { isValid: false, error: `No debe exceder ${max}` };
   }
   
   return { isValid: true, value: num };
@@ -86,15 +86,15 @@ export const validateInteger = (value, min = -Infinity, max = Infinity) => {
   const num = Number(value);
   
   if (isNaN(num) || !Number.isInteger(num)) {
-    return { isValid: false, error: 'Must be a valid integer' };
+    return { isValid: false, error: 'Debe ser un número entero válido' };
   }
   
   if (num < min) {
-    return { isValid: false, error: `Must be at least ${min}` };
+    return { isValid: false, error: `Debe ser al menos ${min}` };
   }
   
   if (num > max) {
-    return { isValid: false, error: `Must not exceed ${max}` };
+    return { isValid: false, error: `No debe exceder ${max}` };
   }
   
   return { isValid: true, value: num };
@@ -108,11 +108,11 @@ export const validateInteger = (value, min = -Infinity, max = Infinity) => {
  */
 export const validateEnum = (value, allowedValues) => {
   if (!Array.isArray(allowedValues)) {
-    return { isValid: false, error: 'Invalid allowed values configuration' };
+    return { isValid: false, error: 'Configuración de valores permitidos inválida' };
   }
   
   if (!allowedValues.includes(value)) {
-    return { isValid: false, error: `Must be one of: ${allowedValues.join(', ')}` };
+    return { isValid: false, error: `Debe ser uno de: ${allowedValues.join(', ')}` };
   }
   
   return { isValid: true, value };
@@ -126,19 +126,19 @@ export const validateEnum = (value, allowedValues) => {
  */
 export const validateURL = (url, allowedProtocols = ['http', 'https']) => {
   if (!url || typeof url !== 'string') {
-    return { isValid: false, error: 'URL must be a string' };
+    return { isValid: false, error: 'La URL debe ser una cadena de texto' };
   }
   
   try {
     const urlObj = new URL(url);
     
     if (!allowedProtocols.includes(urlObj.protocol.slice(0, -1))) {
-      return { isValid: false, error: `Protocol must be one of: ${allowedProtocols.join(', ')}` };
+      return { isValid: false, error: `El protocolo debe ser uno de: ${allowedProtocols.join(', ')}` };
     }
     
     return { isValid: true, value: url };
   } catch (error) {
-    return { isValid: false, error: 'Invalid URL format' };
+    return { isValid: false, error: 'Formato de URL inválido' };
   }
 };
 
@@ -151,21 +151,21 @@ export const validateURL = (url, allowedProtocols = ['http', 'https']) => {
  */
 export const validateDate = (dateStr, minDate = null, maxDate = null) => {
   if (!dateStr || typeof dateStr !== 'string') {
-    return { isValid: false, error: 'Date must be a string' };
+    return { isValid: false, error: 'La fecha debe ser una cadena de texto' };
   }
   
   const date = new Date(dateStr);
   
   if (isNaN(date.getTime())) {
-    return { isValid: false, error: 'Invalid date format' };
+    return { isValid: false, error: 'Formato de fecha inválido' };
   }
   
   if (minDate && date < minDate) {
-    return { isValid: false, error: `Date must be after ${minDate.toISOString()}` };
+    return { isValid: false, error: `La fecha debe ser posterior a ${minDate.toISOString()}` };
   }
   
   if (maxDate && date > maxDate) {
-    return { isValid: false, error: `Date must be before ${maxDate.toISOString()}` };
+    return { isValid: false, error: `La fecha debe ser anterior a ${maxDate.toISOString()}` };
   }
   
   return { isValid: true, value: date };
@@ -181,15 +181,15 @@ export const validateDate = (dateStr, minDate = null, maxDate = null) => {
  */
 export const validateArray = (value, minLength = 0, maxLength = Infinity, itemValidator = null) => {
   if (!Array.isArray(value)) {
-    return { isValid: false, error: 'Value must be an array' };
+    return { isValid: false, error: 'El valor debe ser un arreglo' };
   }
   
   if (value.length < minLength) {
-    return { isValid: false, error: `Array must have at least ${minLength} items` };
+    return { isValid: false, error: `El arreglo debe tener al menos ${minLength} elementos` };
   }
   
   if (value.length > maxLength) {
-    return { isValid: false, error: `Array must not exceed ${maxLength} items` };
+    return { isValid: false, error: `El arreglo no debe exceder ${maxLength} elementos` };
   }
   
   if (itemValidator && typeof itemValidator === 'function') {
@@ -199,7 +199,7 @@ export const validateArray = (value, minLength = 0, maxLength = Infinity, itemVa
     for (let i = 0; i < value.length; i++) {
       const result = itemValidator(value[i], i);
       if (!result.isValid) {
-        errors.push(`Item ${i}: ${result.error}`);
+        errors.push(`Elemento ${i}: ${result.error}`);
       } else {
         validatedItems.push(result.value !== undefined ? result.value : value[i]);
       }
@@ -223,7 +223,7 @@ export const validateArray = (value, minLength = 0, maxLength = Infinity, itemVa
  */
 export const validateObject = (obj, schema) => {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
-    return { isValid: false, errors: ['Value must be an object'] };
+    return { isValid: false, errors: ['El valor debe ser un objeto'] };
   }
   
   const errors = [];
@@ -236,7 +236,7 @@ export const validateObject = (obj, schema) => {
     
     // Check if required field is missing
     if (isRequired && (value === undefined || value === null || value === '')) {
-      errors.push(`${field} is required`);
+      errors.push(`${field} es requerido`);
       continue;
     }
     
@@ -264,7 +264,7 @@ export const validateObject = (obj, schema) => {
   const unexpectedFields = providedFields.filter(field => !allowedFields.includes(field));
   
   if (unexpectedFields.length > 0) {
-    errors.push(`Unexpected fields: ${unexpectedFields.join(', ')}`);
+    errors.push(`Campos inesperados: ${unexpectedFields.join(', ')}`);
   }
   
   return {
@@ -326,7 +326,7 @@ export const userValidationSchema = {
     required: true,
     validator: (value) => {
       if (!isValidEmail(value)) {
-        return { isValid: false, error: 'Invalid email format' };
+        return { isValid: false, error: 'Formato de email inválido' };
       }
       return { isValid: true, value };
     }

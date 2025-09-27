@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler';
-import { securityLogger, SECURITY_EVENTS, SECURITY_LEVELS } from '@/lib/securityLogger';
+import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from '@/lib/securityLogger';
 import { getRateLimitStats, withRateLimit } from '@/lib/rateLimiter';
 import { createServerSupabaseClient } from '@/lib/supabaseServer';
 

@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
-import { Icon, Icons } from '@/components/ui';
+import { Icon, Icons, Button, Card, CardBody } from '@/components/ui';
 
 export default function AdminLayout({ children, activeTab = 'dashboard' }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -34,16 +34,18 @@ export default function AdminLayout({ children, activeTab = 'dashboard' }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-40 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <Card className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-40 transition-all duration-300 rounded-none">
+        <CardBody className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all duration-200 lg:hidden"
               >
                 <Icon path={Icons.menu} size="lg" />
-              </button>
+              </Button>
               
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
@@ -56,28 +58,32 @@ export default function AdminLayout({ children, activeTab = 'dashboard' }) {
             </div>
 
             <div className="flex items-center space-x-4">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={handleSignOut}
                 className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all duration-200"
               >
                 <Icon path={Icons.logout} size="md" />
                 <span>Cerrar Sesión</span>
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
-      </header>
+        </CardBody>
+      </Card>
 
       <div className="flex">
         {/* Sidebar */}
-        <aside className={`${
+        <Card className={`${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } fixed inset-y-0 left-0 z-50 w-64 bg-white/95 backdrop-blur-md border-r border-slate-200/60 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
-          <div className="flex flex-col h-full pt-20 lg:pt-6">
+        } fixed inset-y-0 left-0 z-50 w-64 bg-white/95 backdrop-blur-md border-r border-slate-200/60 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 rounded-none`}>
+          <CardBody className="flex flex-col h-full pt-20 lg:pt-6">
             <nav className="flex-1 px-6 pb-4 space-y-2">
               {tabs.map((tab) => (
-                <button
+                <Button
                   key={tab.id}
+                  variant={activeTab === tab.id ? "primary" : "ghost"}
+                  size="lg"
                   onClick={() => handleTabClick(tab.id)}
                   className={`w-full flex items-center space-x-3 px-4 py-3 text-left rounded-2xl font-medium transition-all duration-300 group ${
                     activeTab === tab.id
@@ -104,15 +110,15 @@ export default function AdminLayout({ children, activeTab = 'dashboard' }) {
                       <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
                     </div>
                   )}
-                </button>
+                </Button>
               ))}
             </nav>
 
             <div className="px-6 pb-6">
               {/* Sidebar footer vacío */}
             </div>
-          </div>
-        </aside>
+          </CardBody>
+        </Card>
 
         {/* Overlay for mobile */}
         {sidebarOpen && (
