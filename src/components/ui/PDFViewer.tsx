@@ -3,10 +3,11 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 
-// Configurar el worker de PDF.js para Next.js
-if (typeof window !== 'undefined' && !pdfjs.GlobalWorkerOptions.workerSrc) {
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.mjs`;
-}
+// Configurar el worker de PDF.js usando el método recomendado
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 
 // Importar estilos
 import 'react-pdf/dist/Page/AnnotationLayer.css';

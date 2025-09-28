@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClientSupabaseClient } from '@/lib/supabaseClient';
+import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/Button';
 
 export default function BackupManagement() {
@@ -29,7 +29,7 @@ export default function BackupManagement() {
 
   const checkAuth = async () => {
     try {
-      const supabase = createClientSupabaseClient();
+      const supabase = getSupabaseBrowserClient();
       const { data: { user }, error } = await supabase.auth.getUser();
       
       if (error || !user) {
