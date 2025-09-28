@@ -58,7 +58,7 @@ export default function AdminLayout({ children, activeTab = 'dashboard' }) {
                   <Icon path={Icons.dashboard} size="lg" className="text-white" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-slate-900">Panel Admin</h1>
+                  <h1 className="text-xl font-bold text-slate-900">Página Secundaria</h1>
                 </div>
               </div>
             </div>
