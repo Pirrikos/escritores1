@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request) {
   try {
-    // Fixed: Added SUPABASE_SERVICE_ROLE_KEY environment variable
     const { filePath, expiresIn = 3600, bucket } = await request.json();
     
     console.log('🔍 signed-url endpoint - Parámetros recibidos:', { filePath, expiresIn, bucket });
