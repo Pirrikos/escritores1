@@ -20,7 +20,7 @@ export const VALIDATION_LIMITS = {
     TITLE_MAX: 300,
     CONTENT_MIN: 1,
     CONTENT_MAX: 100000,
-    CHAPTER_INDEX_MIN: 1
+    CHAPTER_NUMBER_MIN: 1
   }
 };
 
@@ -171,7 +171,7 @@ export function validateWork(workData) {
  */
 export function validatePost(postData) {
   const errors = [];
-  const { title, content, type, work_id, chapter_index } = postData;
+  const { title, content, type, work_id, chapter_number } = postData;
 
   // Content validation
   if (!content || content.trim().length === 0) {
@@ -247,13 +247,13 @@ export function validatePost(postData) {
     }
   }
 
-  // Chapter index validation
-  if (chapter_index !== null && chapter_index !== undefined) {
-    if (chapter_index < VALIDATION_LIMITS.POST.CHAPTER_INDEX_MIN) {
+  // Chapter number validation
+  if (chapter_number !== null && chapter_number !== undefined) {
+    if (chapter_number < VALIDATION_LIMITS.POST.CHAPTER_NUMBER_MIN) {
       errors.push({
-        field: 'chapter_index',
+        field: 'chapter_number',
         type: VALIDATION_ERRORS.INVALID_FORMAT,
-        message: `El índice del capítulo debe ser mayor a ${VALIDATION_LIMITS.POST.CHAPTER_INDEX_MIN - 1}`
+        message: `El número del capítulo debe ser mayor a ${VALIDATION_LIMITS.POST.CHAPTER_NUMBER_MIN - 1}`
       });
     }
   }

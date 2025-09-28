@@ -26,5 +26,8 @@ export type { ModalProps, ModalHeaderProps, ModalBodyProps, ModalFooterProps } f
 
 export { Icon, Icons } from './Icon';
 
+export { ViewDownloadButton } from './ViewDownloadButton';
+export type { ViewDownloadButtonProps } from './ViewDownloadButton';
+
 // Utility functions
 export { cn } from '../../lib/utils';

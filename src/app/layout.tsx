@@ -28,7 +28,6 @@ export const metadata: Metadata = {
   description: "Una plataforma para escritores donde puedes crear, compartir y descubrir historias, poemas y ensayos. Únete a nuestra comunidad de escritores creativos.",
   keywords: ["escritura", "historias", "poemas", "ensayos", "escritores", "literatura", "creatividad"],
   authors: [{ name: "Escritores Platform" }],
-  viewport: "width=device-width, initial-scale=1",
   robots: "index, follow",
   openGraph: {
     title: "Escritores - Plataforma de Escritura Creativa",
@@ -37,6 +36,8 @@ export const metadata: Metadata = {
     locale: "es_ES",
   },
 };
+
+export const viewport = "width=device-width, initial-scale=1";
 
 export default function RootLayout({
   children,

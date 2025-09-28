@@ -29,6 +29,12 @@ export default function AdminLayout({ children, activeTab = 'dashboard' }) {
       href: '/admin', 
       icon: Icons.dashboard
     },
+    { 
+      id: 'library', 
+      label: 'Library', 
+      href: '/library', 
+      icon: Icons.library
+    },
   ];
 
   return (

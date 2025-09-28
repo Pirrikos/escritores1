@@ -88,7 +88,7 @@ export async function createBackup(tableName, options = {}) {
   console.log(`📦 Iniciando backup de ${tableName}...`);
   
   try {
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
     
     // Verificar si es necesario hacer backup
     const lastBackup = lastBackupTimes.get(tableName);
@@ -231,7 +231,7 @@ export async function restoreFromBackup(tableName, backupTimestamp, options = {}
     }
     
     // Realizar restauración
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
     
     // Opcionalmente limpiar tabla existente
     if (options.clearExisting) {
