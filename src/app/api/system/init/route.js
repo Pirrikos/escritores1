@@ -7,19 +7,19 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { ensureAdmin } from '../../../lib/adminAuth.server';
+import { ensureAdmin } from '@/lib/adminAuth.server.js';
 import { 
   safeInitializeBackup, 
   safeStopBackup, 
   restartBackupSystem,
   getBackupSystemStatus 
-} from '../../../lib/backupInitializer';
+} from '@/lib/backupInitializer.js';
 import { 
   withErrorHandling, 
   createErrorResponse, 
   handleAuthError,
   ERROR_CODES 
-} from '../../../lib/errorHandler';
+} from '@/lib/errorHandler.js';
 
 /**
  * GET - Obtener estado del sistema de backup
