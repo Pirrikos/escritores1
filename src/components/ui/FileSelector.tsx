@@ -44,7 +44,7 @@ const FileSelector: React.FC<FileSelectorProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const validateFile = (file: File): string | null => {
+  const validateFile = useCallback((file: File): string | null => {
     // Validar tipo de archivo
     if (!acceptedTypes.includes(file.type)) {
       return `Tipo de archivo no permitido. Tipos aceptados: ${acceptedTypes.join(', ')}`;
@@ -56,7 +56,7 @@ const FileSelector: React.FC<FileSelectorProps> = ({
     }
 
     return null;
-  };
+  }, [acceptedTypes, maxSize]);
 
   const handleFile = useCallback((file: File) => {
     const validationError = validateFile(file);
@@ -68,7 +68,7 @@ const FileSelector: React.FC<FileSelectorProps> = ({
 
     setError(null);
     onFileSelect?.(file);
-  }, [acceptedTypes, maxSize, onFileSelect]);
+  }, [validateFile, onFileSelect]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();

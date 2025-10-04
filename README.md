@@ -34,3 +34,60 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Environment Variables
+
+Configure the following variables for local dev, CI, and production:
+
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon public key.
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key (server-only).
+- `BASE_URL`: App base URL for tests (default `http://localhost:3000`).
+- `TEST_ADMIN_EMAIL` / `TEST_ADMIN_PASSWORD`: Credentials for E2E admin tests.
+
+Local setup:
+
+- Copy `.env.example` to `.env.local` and fill values.
+- Keep `SUPABASE_SERVICE_ROLE_KEY` only on server; never expose it to the client.
+
+## CI Configuration (GitHub Actions)
+
+Set repository secrets to run E2E in CI:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `TEST_ADMIN_EMAIL`
+- `TEST_ADMIN_PASSWORD`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+The workflows read these via `${{ secrets.* }}` and run E2E against the built app.
+
+## Vercel Deployment
+
+Add environment variables in your Vercel project settings:
+
+- `NEXT_PUBLIC_SUPABASE_URL` (Environment: Production/Preview/Development)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Environment: Production/Preview/Development)
+- `SUPABASE_SERVICE_ROLE_KEY` (Environment: Production/Preview/Development, server-only)
+
+The service role key is used exclusively on the server to verify `profiles.role` and perform admin-only operations (e.g., signed URLs, backup initialization). It must never be exposed to the browser.
+
+## API Security (Admin)
+
+- Admin-only endpoints currently include:
+  - `/api/storage/signed-url` (signed URLs via service role)
+  - `/api/debug-insert` (non-production only)
+  - `/api/backup`
+  - `/api/system/init`
+  - `/api/monitoring/errors`
+- Server-side authorization uses `ensureAdmin(req)` from `src/lib/adminAuth.server.js` to validate the session and confirm `profiles.role === 'admin'` via the service role.
+- Do not use the service role key on the client; only in server modules and route handlers.
+- Any new endpoint that performs privileged operations (service role, administrative actions, or cross-project tasks) must gate access with `ensureAdmin`.
+
+### Testing Admin Gating (E2E)
+
+- Playwright global setup (`tests/e2e/global.setup.ts`) creates/ensures a test admin and persists session state to `tests/e2e/.storage/admin.json`.
+- E2E tests validate admin gating for sensitive endpoints, e.g.:
+  - `tests/e2e/storage.signed-url.spec.ts`
+  - `tests/e2e/debug-insert.spec.ts`
+- Base URL is controlled by `BASE_URL`; default is `http://localhost:3000`.

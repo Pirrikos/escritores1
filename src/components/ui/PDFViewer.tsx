@@ -39,10 +39,8 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
   // Ref para almacenar el ArrayBuffer del PDF
   const pdfDataRef = useRef<ArrayBuffer | null>(null);
 
-  // Memoizar el objeto file para evitar re-renders innecesarios
-  const fileObject = useMemo(() => {
-    return pdfDataRef.current ? { data: pdfDataRef.current } : null;
-  }, [pdfDataRef.current]);
+  // Construir el objeto file a partir del ref; no usar useMemo con refs mutables
+  const fileObject = pdfDataRef.current ? { data: pdfDataRef.current } : null;
 
   // Memoize the options object to prevent unnecessary reloads
   const documentOptions = useMemo(() => ({
@@ -53,12 +51,12 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
     setNumPages(numPages);
     setLoading(false);
     setError(null);
-  }, [fileUrl]);
+  }, []);
 
   const onDocumentLoadError = useCallback((error: Error) => {
     setError(`Error al cargar el PDF: ${error.message || error}`);
     setLoading(false);
-  }, [fileUrl]);
+  }, []);
 
   // Cargar PDF como ArrayBuffer en lugar de usar URL directa
   useEffect(() => {

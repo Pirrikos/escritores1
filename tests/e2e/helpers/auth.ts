@@ -33,6 +33,7 @@ export async function getAdminCookies(): Promise<Cookie[] | null> {
   }
 
   const cookies: Cookie[] = [
+    // Cookies para compatibilidad con distintas versiones de helpers
     {
       name: 'sb:token',
       value: access_token,
@@ -44,6 +45,24 @@ export async function getAdminCookies(): Promise<Cookie[] | null> {
     },
     {
       name: 'sb:refresh-token',
+      value: refresh_token || '',
+      domain: hostname,
+      path: '/',
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure,
+    },
+    {
+      name: 'sb-access-token',
+      value: access_token,
+      domain: hostname,
+      path: '/',
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure,
+    },
+    {
+      name: 'sb-refresh-token',
       value: refresh_token || '',
       domain: hostname,
       path: '/',

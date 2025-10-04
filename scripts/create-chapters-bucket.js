@@ -41,7 +41,7 @@ async function createChaptersBucket() {
     console.log('📦 Creando bucket "chapters"...');
     
     // Crear el bucket
-    const { data, error } = await supabase.storage.createBucket('chapters', {
+    const { error } = await supabase.storage.createBucket('chapters', {
       public: false,
       allowedMimeTypes: [
         'application/pdf',

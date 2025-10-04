@@ -4,13 +4,9 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getSupabaseRouteClient } from "../../../lib/supabaseServer";
 import { 
-  withErrorHandling, 
-  handleDatabaseError,
-  createErrorResponse,
-  ERROR_CODES 
+  withErrorHandling
 } from "../../../lib/errorHandler";
 import securityLogger from "../../../lib/securityLogger";
-import { monitoring } from "../../../lib/monitoring";
 import { performHealthCheck, quickHealthCheck, readinessCheck, HEALTH_STATUS } from '../../../lib/healthCheck.js';
 import productionLogger, { LOG_CATEGORIES } from '../../../lib/productionLogger.js';
 
@@ -43,7 +39,7 @@ export async function GET(request) {
       
       case 'legacy':
         // Keep legacy health check for backward compatibility
-        return await legacyHealthCheck(request);
+        return await legacyHealthCheck();
       
       case 'full':
       default:
@@ -89,7 +85,7 @@ export async function GET(request) {
 }
 
 // Legacy health check function for backward compatibility
-async function legacyHealthCheck(request) {
+async function legacyHealthCheck() {
   try {
     const startTime = Date.now();
     const supabase = await getSupabaseRouteClient();
@@ -142,7 +138,7 @@ async function legacyHealthCheck(request) {
     // Supabase Auth service check
     try {
       const authStartTime = Date.now();
-      const { data: session, error: authError } = await supabase.auth.getSession();
+      const { error: authError } = await supabase.auth.getSession();
       const authResponseTime = Date.now() - authStartTime;
       
       if (authError && !authError.message.includes('session')) {
@@ -289,8 +285,8 @@ async function legacyHealthCheck(request) {
     // Log health issues
     if (overallStatus !== 'healthy') {
       const unhealthyServices = Object.entries(checks)
-        .filter(([_, check]) => check.status === 'unhealthy')
-        .map(([name, _]) => name);
+        .filter(([, check]) => check.status === 'unhealthy')
+        .map(([name]) => name);
       
       securityLogger.logSecurityEvent('HEALTH_CHECK_ISSUES', 'WARNING', {
         overallStatus,

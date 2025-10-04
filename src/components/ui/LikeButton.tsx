@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
+import type { User } from '@supabase/supabase-js';
 
 interface LikeButtonProps {
   targetType: 'post' | 'chapter' | 'work';
@@ -24,27 +25,12 @@ export default function LikeButton({
   const [isLiked, setIsLiked] = useState(initialLiked);
   const [isLoading, setIsLoading] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   const supabase = getSupabaseBrowserClient();
 
-  // Obtener usuario actual
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      
-      // Si hay usuario, obtener el estado actual de likes
-      if (user) {
-        await fetchLikeData(user.id);
-      }
-    };
-
-    getUser();
-  }, [targetType, targetId]);
-
-  // Función para obtener datos de likes
-  const fetchLikeData = async (userId?: string) => {
+  // Función para obtener datos de likes (declarada antes del useEffect para evitar TDZ)
+  const fetchLikeData = useCallback(async (userId?: string) => {
     try {
       const params = new URLSearchParams({
         target_type: targetType,
@@ -62,7 +48,22 @@ export default function LikeButton({
     } catch (error) {
       console.error('Error fetching like data:', error);
     }
-  };
+  }, [targetType, targetId]);
+
+  // Obtener usuario actual
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      
+      // Si hay usuario, obtener el estado actual de likes
+      if (user) {
+        await fetchLikeData(user.id);
+      }
+    };
+
+    getUser();
+  }, [supabase, fetchLikeData]);
 
   // Manejar click en el botón de like
   const handleLikeClick = async () => {

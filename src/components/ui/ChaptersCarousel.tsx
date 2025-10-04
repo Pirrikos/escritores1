@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import CoverRenderer from '@/components/ui/CoverRenderer';
 import { parsePreviewCover } from '@/lib/utils';
@@ -126,13 +127,17 @@ export default function ChaptersCarousel({
                       chapter.profiles?.display_name || 'Autor Desconocido'
                     );
                     if (meta.mode === 'template') {
+                      const validTemplateIds = ['template-1','template-2','template-3','template-4','template-5','template-6','template-7','template-8'] as const;
+                      const validPaletteIds = ['marino','rojo','negro','verde','purpura'] as const;
+                      const safeTemplateId = (validTemplateIds as readonly string[]).includes(meta.templateId) ? (meta.templateId as typeof validTemplateIds[number]) : 'template-1';
+                      const safePaletteId = (validPaletteIds as readonly string[]).includes(meta.paletteId) ? (meta.paletteId as typeof validPaletteIds[number]) : 'marino';
                       return (
                         <CoverRenderer
                           mode="template"
-                          templateId={meta.templateId as any}
+                          templateId={safeTemplateId}
                           title={meta.title}
                           author={meta.author}
-                          paletteId={meta.paletteId as any}
+                          paletteId={safePaletteId}
                           width={180}
                           height={270}
                           className="shadow-md rounded-sm"
@@ -142,9 +147,11 @@ export default function ChaptersCarousel({
                     if (meta.mode === 'image') {
                       return (
                         <div className="w-[180px] h-[270px] bg-gray-200 rounded overflow-hidden shadow-md">
-                          <img
+                          <Image
                             src={meta.url}
                             alt={`Portada de ${chapter.title}`}
+                            width={180}
+                            height={270}
                             className="w-full h-full object-cover"
                           />
                         </div>

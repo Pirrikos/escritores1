@@ -25,7 +25,7 @@ async function addUserIdColumn() {
   try {
     // Paso 1: Agregar la columna user_id (nullable inicialmente)
     console.log('1️⃣ Agregando columna user_id...');
-    const { data: addColumn, error: addError } = await supabase
+    const { error: addError } = await supabase
       .from('chapters')
       .select('id')
       .limit(1);

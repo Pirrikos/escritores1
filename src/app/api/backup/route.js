@@ -3,22 +3,25 @@
  * Permite crear, listar y restaurar backups
  */
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabaseServer';
+import { ensureAdmin } from '../../../lib/adminAuth.server';
 import { 
   createBackup, 
   restoreFromBackup, 
   listBackups, 
   getBackupStatistics 
-} from '@/lib/backup';
+} from '../../../lib/backup';
 import { 
   withErrorHandling, 
   createErrorResponse, 
   handleAuthError,
   ERROR_CODES 
-} from '@/lib/errorHandler';
-import productionLogger, { LOG_CATEGORIES } from '@/lib/productionLogger';
-import { PerformanceTimer } from '@/lib/performanceMonitor';
+} from '../../../lib/errorHandler';
+import productionLogger, { LOG_CATEGORIES } from '../../../lib/productionLogger';
+import { PerformanceTimer } from '../../../lib/performanceMonitor';
 
 // Tablas permitidas para backup
 const ALLOWED_TABLES = ['posts', 'profiles', 'follows', 'works'];
@@ -36,51 +39,42 @@ export async function GET(request) {
     });
 
     try {
-      const supabase = createServerSupabaseClient();
+      // Eliminar cliente supabase no utilizado para evitar warnings de lint
       const { searchParams } = new URL(request.url);
       const action = searchParams.get('action');
       const table = searchParams.get('table');
 
-      productionLogger.info('Backup GET request started', LOG_CATEGORIES.API, {
+      productionLogger.info(LOG_CATEGORIES.API, 'Backup GET request started', {
         action,
         table,
         userAgent: request.headers.get('user-agent'),
         ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
       });
 
-      // Verificar autenticación y permisos de admin
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        productionLogger.error('Authentication failed in backup endpoint', LOG_CATEGORIES.AUTH, {
-          error: authError?.message,
-          endpoint: '/api/backup'
-        });
-        return handleAuthError(authError || new Error('No autenticado'));
-      }
-
-      // Verificar rol de administrador
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (!profile || profile.role !== 'admin') {
-        productionLogger.warn('Unauthorized backup access attempt', LOG_CATEGORIES.SECURITY, {
-          userId: user.id,
-          userRole: profile?.role,
+      // Autenticación y verificación de admin centralizada
+      const admin = await ensureAdmin(request);
+      if (!admin.ok) {
+        if (admin.code === 'UNAUTHORIZED') {
+          productionLogger.error(LOG_CATEGORIES.AUTH, 'Authentication failed in backup endpoint', {
+            error: admin.error?.message,
+            endpoint: '/api/backup'
+          });
+          return handleAuthError(admin.error || new Error('No autenticado'));
+        }
+        productionLogger.warn(LOG_CATEGORIES.SECURITY, 'Unauthorized backup access attempt', {
+          userId: admin.user?.id,
+          userRole: admin.profile?.role,
           requiredRole: 'admin'
         });
         return createErrorResponse(
-          'Acceso denegado',
-          403,
           ERROR_CODES.FORBIDDEN,
-          { requiredRole: 'admin', userRole: profile?.role }
+          'Acceso denegado',
+          { requiredRole: 'admin', userRole: admin.profile?.role }
         );
       }
 
-      productionLogger.info('Admin backup access granted', LOG_CATEGORIES.USER_ACTION, {
-        userId: user.id,
+      productionLogger.info(LOG_CATEGORIES.USER_ACTION, 'Admin backup access granted', {
+        userId: admin.user.id,
         action: 'backup_access',
         requestedAction: action,
         table
@@ -89,8 +83,8 @@ export async function GET(request) {
       switch (action) {
         case 'statistics':
           const stats = getBackupStatistics();
-          productionLogger.info('Backup statistics retrieved', LOG_CATEGORIES.SYSTEM, {
-            userId: user.id,
+          productionLogger.info(LOG_CATEGORIES.SYSTEM, 'Backup statistics retrieved', {
+            userId: admin.user.id,
             statsCount: Object.keys(stats).length
           });
           performanceTimer.end();
@@ -102,8 +96,8 @@ export async function GET(request) {
         case 'list':
         default:
           const backups = listBackups(table);
-          productionLogger.info('Backup list retrieved', LOG_CATEGORIES.SYSTEM, {
-            userId: user.id,
+          productionLogger.info(LOG_CATEGORIES.SYSTEM, 'Backup list retrieved', {
+            userId: admin.user.id,
             table,
             backupCount: backups.length
           });
@@ -119,14 +113,14 @@ export async function GET(request) {
       }
     } catch (error) {
       performanceTimer.end();
-      productionLogger.error('Unexpected error in backup GET endpoint', LOG_CATEGORIES.API, {
+      productionLogger.error(LOG_CATEGORIES.API, 'Unexpected error in backup GET endpoint', {
         error: error.message,
         stack: error.stack,
         endpoint: '/api/backup'
       });
       throw error;
     }
-  });
+  })(request);
 }
 
 /**
@@ -134,27 +128,16 @@ export async function GET(request) {
  */
 export async function POST(request) {
   return withErrorHandling(async () => {
-    const supabase = createServerSupabaseClient();
-    
-    // Verificar autenticación y permisos de admin
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return handleAuthError(authError || new Error('No autenticado'));
-    }
-
-    // Verificar rol de administrador
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.role !== 'admin') {
+    // Autenticación y verificación de admin centralizada
+    const admin = await ensureAdmin(request);
+    if (!admin.ok) {
+      if (admin.code === 'UNAUTHORIZED') {
+        return handleAuthError(admin.error || new Error('No autenticado'));
+      }
       return createErrorResponse(
-        'Acceso denegado',
-        403,
         ERROR_CODES.FORBIDDEN,
-        { requiredRole: 'admin', userRole: profile?.role }
+        'Acceso denegado',
+        { requiredRole: 'admin', userRole: admin.profile?.role }
       );
     }
 
@@ -164,10 +147,9 @@ export async function POST(request) {
     // Validar tabla
     if (table && !ALLOWED_TABLES.includes(table)) {
       return createErrorResponse(
-        'Tabla no permitida',
-        400,
         ERROR_CODES.VALIDATION_ERROR,
-        { 
+        'Tabla no permitida',
+        {
           allowedTables: ALLOWED_TABLES,
           providedTable: table
         }
@@ -178,9 +160,8 @@ export async function POST(request) {
       case 'create':
         if (!table) {
           return createErrorResponse(
-            'Tabla requerida para crear backup',
-            400,
-            ERROR_CODES.VALIDATION_ERROR
+            ERROR_CODES.VALIDATION_ERROR,
+            'Tabla requerida para crear backup'
           );
         }
 
@@ -242,9 +223,8 @@ export async function POST(request) {
           });
         } catch (error) {
           return createErrorResponse(
-            'Error en backup completo',
-            500,
             ERROR_CODES.BACKUP_FAILED,
+            'Error en backup completo',
             { error: error.message }
           );
         }
@@ -252,9 +232,8 @@ export async function POST(request) {
       case 'restore':
         if (!table || !timestamp) {
           return createErrorResponse(
-            'Tabla y timestamp requeridos para restaurar',
-            400,
             ERROR_CODES.VALIDATION_ERROR,
+            'Tabla y timestamp requeridos para restaurar',
             { required: ['table', 'timestamp'] }
           );
         }
@@ -271,9 +250,8 @@ export async function POST(request) {
           });
         } catch (error) {
           return createErrorResponse(
-            `Error restaurando ${table}`,
-            500,
             ERROR_CODES.RESTORE_FAILED,
+            `Error restaurando ${table}`,
             { 
               table,
               timestamp,
@@ -284,16 +262,15 @@ export async function POST(request) {
 
       default:
         return createErrorResponse(
-          'Acción no válida',
-          400,
           ERROR_CODES.VALIDATION_ERROR,
+          'Acción no válida',
           { 
             allowedActions: ['create', 'create_all', 'restore'],
             providedAction: action
           }
         );
     }
-  });
+  })(request);
 }
 
 /**
@@ -301,27 +278,15 @@ export async function POST(request) {
  */
 export async function DELETE(request) {
   return withErrorHandling(async () => {
-    const supabase = createServerSupabaseClient();
-    
-    // Verificar autenticación y permisos de admin
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return handleAuthError(authError || new Error('No autenticado'));
-    }
-
-    // Verificar rol de administrador
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.role !== 'admin') {
+    const admin = await ensureAdmin(request);
+    if (!admin.ok) {
+      if (admin.code === 'UNAUTHORIZED') {
+        return handleAuthError(admin.error || new Error('No autenticado'));
+      }
       return createErrorResponse(
-        'Acceso denegado',
-        403,
         ERROR_CODES.FORBIDDEN,
-        { requiredRole: 'admin', userRole: profile?.role }
+        'Acceso denegado',
+        { requiredRole: 'admin', userRole: admin.profile?.role }
       );
     }
 
@@ -335,5 +300,5 @@ export async function DELETE(request) {
         manualCleanup: 'Disponible en futuras versiones'
       }
     });
-  });
+  })(request);
 }

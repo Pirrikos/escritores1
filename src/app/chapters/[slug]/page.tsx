@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -10,6 +10,7 @@ import { ViewDownloadButton } from '@/components/ui/ViewDownloadButton';
 import { ToastProvider, useToast } from '@/contexts/ToastContext';
 import { WorkDetailSkeleton } from '@/components/ui/WorkDetailSkeleton';
 import { generateSlug } from '@/lib/slugUtils';
+import Image from 'next/image';
 
 interface Chapter {
   id: string;
@@ -74,13 +75,7 @@ function ChapterDetailPageContent({
 }) {
   const { addToast } = useToast();
 
-  useEffect(() => {
-    if (slug) {
-      loadChapterBySlug(slug);
-    }
-  }, [slug]);
-
-  const loadChapterBySlug = async (chapterSlug: string) => {
+  const loadChapterBySlug = useCallback(async (chapterSlug: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -144,7 +139,13 @@ function ChapterDetailPageContent({
     } finally {
       setLoading(false);
     }
-  };
+  }, [addToast, supabase, setChapter, setError, setLoading]);
+
+  useEffect(() => {
+    if (slug) {
+      loadChapterBySlug(slug);
+    }
+  }, [slug, loadChapterBySlug]);
 
   if (loading) {
     return <WorkDetailSkeleton />;
@@ -203,13 +204,21 @@ function ChapterDetailPageContent({
                         const paletteId = parts[2];
                         const encodedTitle = parts[3];
                         const encodedAuthor = parts[4];
+                        const ALLOWED_TEMPLATES = ['template-1', 'template-2', 'template-3'] as const;
+                        const ALLOWED_PALETTES = ['marino', 'rojo', 'verde', 'violeta'] as const;
+                        type TemplateId = typeof ALLOWED_TEMPLATES[number];
+                        type PaletteId = typeof ALLOWED_PALETTES[number];
+                        const isAllowed = <T extends readonly string[]>(arr: T, val: string): val is T[number] =>
+                          (arr as ReadonlyArray<string>).includes(val);
+                        const tId = isAllowed(ALLOWED_TEMPLATES, templateId) ? templateId : 'template-1';
+                        const pId = isAllowed(ALLOWED_PALETTES, paletteId) ? paletteId : 'marino';
                         
                         return (
                           <CoverRenderer
-                            templateId={templateId as any}
+                            templateId={tId as TemplateId}
                             title={decodeURIComponent(encodedTitle || chapter.title)}
                             author={decodeURIComponent(encodedAuthor || chapter.profiles.display_name)}
-                            paletteId={paletteId as any}
+                            paletteId={pId as PaletteId}
                             className="w-full h-full rounded-lg shadow-lg"
                           />
                         );
@@ -217,9 +226,11 @@ function ChapterDetailPageContent({
                     ) : (
                       // Portada personalizada subida
                       <div className="w-full h-full bg-gray-200 rounded-lg overflow-hidden shadow-lg">
-                        <img 
+                        <Image 
                           src={chapter.cover_url} 
                           alt={`Portada de ${chapter.title}`}
+                          width={600}
+                          height={800}
                           className="w-full h-full object-cover"
                         />
                       </div>

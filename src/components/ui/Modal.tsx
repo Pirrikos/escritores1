@@ -44,10 +44,21 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
     showCloseButton = true,
     className,
     ...props
-  }, ref) => {
+  }, _ref) => {
     const [isVisible, setIsVisible] = useState(false);
     const modalRef = useRef<HTMLDivElement>(null);
     const previousActiveElement = useRef<HTMLElement | null>(null);
+
+    // Forward both internal and external refs to the same DOM node
+    const setCombinedRef = (node: HTMLDivElement | null) => {
+      modalRef.current = node;
+      if (typeof _ref === 'function') {
+        _ref(node);
+      } else if (_ref && 'current' in _ref) {
+        // @ts-expect-error generic forwarded ref assignment
+        _ref.current = node;
+      }
+    };
 
     const sizeStyles = {
       sm: 'max-w-md',
@@ -140,7 +151,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
 
         {/* Modal */}
         <div
-          ref={modalRef}
+          ref={setCombinedRef}
           className={cn(
             'relative w-full transform rounded-lg bg-white shadow-xl transition-all duration-300',
             sizeStyles[size],

@@ -1,26 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabaseServer';
 import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler';
 import { getErrorStatistics } from '@/lib/monitoring';
+import { ensureAdmin } from '@/lib/adminAuth.server';
 
 async function GET(request) {
   try {
-    const supabase = createServerSupabaseClient();
-    
-    // Verificar autenticación de administrador
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    if (authError || !session?.user) {
-      return handleAuthError('Usuario no autenticado');
-    }
-
-    // Verificar si el usuario es administrador
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single();
-
-    if (profile?.role !== 'admin') {
+    const admin = await ensureAdmin(request);
+    if (!admin.ok) {
+      if (admin.code === 'UNAUTHORIZED') {
+        return handleAuthError(admin.error || new Error('Usuario no autenticado'));
+      }
       return createErrorResponse(
         ERROR_CODES.FORBIDDEN,
         'Acceso denegado: Se requieren permisos de administrador'
@@ -31,7 +20,7 @@ async function GET(request) {
     const stats = getErrorStatistics();
     
     // Obtener errores persistidos (si existen)
-    let persistedErrors = [];
+    // Persisted errors could be loaded from DB in future
     try {
       // Aquí se podría consultar una tabla de errores en Supabase
       // Por ahora retornamos las estadísticas del cache en memoria
@@ -64,31 +53,20 @@ async function GET(request) {
 
 async function POST(request) {
   try {
-    const supabase = createServerSupabaseClient();
-    
-    // Verificar autenticación
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    if (authError || !session?.user) {
-      return handleAuthError('Usuario no autenticado');
+    const admin = await ensureAdmin(request);
+    if (!admin.ok) {
+      if (admin.code === 'UNAUTHORIZED') {
+        return handleAuthError(admin.error || new Error('Usuario no autenticado'));
+      }
+      return createErrorResponse(
+        ERROR_CODES.FORBIDDEN,
+        'Acceso denegado: Se requieren permisos de administrador'
+      );
     }
 
     const { action } = await request.json();
 
     if (action === 'clear_cache') {
-      // Verificar permisos de administrador
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single();
-
-      if (profile?.role !== 'admin') {
-        return createErrorResponse(
-          ERROR_CODES.FORBIDDEN,
-          'Acceso denegado: Se requieren permisos de administrador'
-        );
-      }
-
       // Limpiar cache de errores
       const { clearErrorCache } = await import('@/lib/monitoring');
       clearErrorCache();

@@ -18,7 +18,7 @@ import {
 } from "../../../lib/errorHandler";
 import { withRateLimit, createIPRateLimiter } from "../../../lib/rateLimiter";
 import productionLogger, { LOG_CATEGORIES } from "../../../lib/productionLogger";
-import { createPerformanceMiddleware, monitorDatabaseOperation } from "../../../lib/performanceMonitor";
+import { monitorDatabaseOperation } from "../../../lib/performanceMonitor";
 
 // Función de validación de datos del post mejorada
 function validatePostData(body, userId) {

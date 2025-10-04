@@ -8,7 +8,6 @@ import { Icon, Icons } from './Icon';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './Modal';
 import { useToast } from '../../contexts/ToastContext';
 import { detectFileType, canViewInBrowser, shouldDownloadOnly, getFileTypeDescription, getSignedFileUrl, type FileType } from '@/lib/fileUtils';
-import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
 
 // Importación dinámica de PDFViewer para evitar problemas de SSR
 const PDFViewer = dynamic(() => import('./PDFViewer'), {
@@ -72,7 +71,6 @@ export function ViewDownloadButton({
   const [actualFileUrl, setActualFileUrl] = useState<string | null>(fileUrl || null);
   const [fileExists, setFileExists] = useState<boolean>(true); // Controla si el archivo existe
   const { addToast } = useToast();
-  const supabase = getSupabaseBrowserClient();
 
   // Generar URL firmada si se proporciona filePath (solo para rutas de bucket, no URLs externas)
   React.useEffect(() => {
@@ -100,7 +98,7 @@ export function ViewDownloadButton({
         const signedUrl = await getSignedFileUrl(filePath, 3600, bucket);
         setActualFileUrl(signedUrl);
         setFileExists(true);
-      } catch (error) {
+      } catch {
         // Asumir que el archivo existe y manejar errores en tiempo de ejecución
         // Esto evita mostrar "Archivo no disponible" cuando el archivo sí existe
         setFileExists(true);
@@ -183,7 +181,7 @@ export function ViewDownloadButton({
           setIsLoading(true);
           urlToUse = await getSignedFileUrl(filePath, 3600, bucket);
           setActualFileUrl(urlToUse);
-        } catch (error) {
+        } catch {
           addToast({
             type: 'error',
             message: 'Error al acceder al archivo'
@@ -256,7 +254,7 @@ export function ViewDownloadButton({
             urlToUse = await getSignedFileUrl(filePath);
             setActualFileUrl(urlToUse);
             setFileExists(true); // Asumir que existe si se pudo generar la URL
-          } catch (urlError) {
+          } catch {
             setFileExists(false);
             addToast({
               type: 'warning',
@@ -264,7 +262,7 @@ export function ViewDownloadButton({
             });
             return;
           }
-        } catch (error) {
+        } catch {
           addToast({
             type: 'error',
             message: 'Error al acceder al archivo'
@@ -305,7 +303,7 @@ export function ViewDownloadButton({
         type: 'success',
         message: `Archivo "${getFileName()}" descargado exitosamente`
       });
-    } catch (error) {
+    } catch {
       addToast({
         type: 'error',
         message: 'Error al descargar el archivo'

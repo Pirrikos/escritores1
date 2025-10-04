@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -10,6 +10,7 @@ import { ViewDownloadButton } from '@/components/ui/ViewDownloadButton';
 import { ToastProvider, useToast } from '@/contexts/ToastContext';
 import { WorkDetailSkeleton } from '@/components/ui/WorkDetailSkeleton';
 import { generateSlug } from '@/lib/slugUtils';
+import Image from 'next/image';
 
 interface Work {
   id: string;
@@ -70,14 +71,8 @@ function WorkDetailPageContent({
   supabase: SupabaseClient;
 }) {
   const { addToast } = useToast();
-
-  useEffect(() => {
-    if (slug) {
-      loadWorkBySlug(slug);
-    }
-  }, [slug]);
-
-  const loadWorkBySlug = async (workSlug: string) => {
+  // Declarar la función antes del useEffect para evitar TDZ
+  const loadWorkBySlug = useCallback(async (workSlug: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -134,7 +129,13 @@ function WorkDetailPageContent({
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase, addToast, setLoading, setError, setWork]);
+
+  useEffect(() => {
+    if (slug) {
+      loadWorkBySlug(slug);
+    }
+  }, [slug, loadWorkBySlug]);
 
   if (loading) {
     return <WorkDetailSkeleton />;
@@ -189,17 +190,25 @@ function WorkDetailPageContent({
                     work.cover_url.startsWith('preview:') ? (
                       (() => {
                         const parts = work.cover_url.split(':');
-                        const templateId = parts[1];
-                        const paletteId = parts[2];
+                        const templateIdRaw = parts[1];
+                        const paletteIdRaw = parts[2];
                         const encodedTitle = parts[3];
                         const encodedAuthor = parts[4];
+                        const validTemplateIds = ['template-1','template-2','template-3'] as const;
+                        const validPaletteIds = ['marino','rojo','verde','morado'] as const;
+                        const templateId = (validTemplateIds as readonly string[]).includes(templateIdRaw)
+                          ? (templateIdRaw as typeof validTemplateIds[number])
+                          : 'template-1';
+                        const paletteId = (validPaletteIds as readonly string[]).includes(paletteIdRaw)
+                          ? (paletteIdRaw as typeof validPaletteIds[number])
+                          : 'marino';
                         
                         return (
                           <CoverRenderer
-                            templateId={templateId as any}
+                            templateId={templateId}
                             title={decodeURIComponent(encodedTitle || work.title)}
                             author={decodeURIComponent(encodedAuthor || work.profiles.display_name)}
-                            paletteId={paletteId as any}
+                            paletteId={paletteId}
                             className="w-full h-full rounded-lg shadow-lg"
                           />
                         );
@@ -207,11 +216,12 @@ function WorkDetailPageContent({
                     ) : (
                       // Portada personalizada subida
                       <div className="w-full h-full bg-gray-200 rounded-lg overflow-hidden shadow-lg">
-                        {/* Se recomienda next/image para optimización */}
-                        <img 
-                          src={work.cover_url} 
+                        <Image 
+                          src={work.cover_url}
                           alt={`Portada de ${work.title}`}
-                          className="w-full h-full object-cover"
+                          fill
+                          sizes="(max-width: 640px) 100vw, 400px"
+                          className="object-cover"
                         />
                       </div>
                     )

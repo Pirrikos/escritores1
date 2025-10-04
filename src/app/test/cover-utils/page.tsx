@@ -27,7 +27,19 @@ const samples = [
   },
 ];
 
-function ResultRow({ name, input, titleFallback, authorFallback, expect }: any) {
+type Sample = {
+  name: string;
+  input?: string;
+  titleFallback: string;
+  authorFallback: string;
+  expect: {
+    mode: 'template' | 'image' | 'auto';
+    templateId?: string;
+    paletteId?: string;
+  };
+};
+
+function ResultRow({ name, input, titleFallback, authorFallback, expect }: Sample) {
   const meta = parsePreviewCover(input, titleFallback, authorFallback);
   const pass = meta.mode === expect.mode &&
     (meta.mode !== 'template' ||

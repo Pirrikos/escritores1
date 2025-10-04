@@ -1,9 +1,31 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { ensureAdmin } from '../../../../lib/adminAuth.server.js';
+import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '../../../../lib/errorHandler.js';
 
 export async function POST(request) {
-  try {
-    const { filePath, expiresIn = 3600, bucket } = await request.json();
+  return withErrorHandling(async (req) => {
+    // Verificación de administrador (RLS-safe) ANTES de leer cuerpo
+    const admin = await ensureAdmin(req);
+    if (!admin.ok) {
+      if (admin.code === 'UNAUTHORIZED') {
+        return handleAuthError(admin.error || new Error('No autenticado'), {
+          endpoint: '/api/storage/signed-url',
+          method: 'POST'
+        });
+      }
+      return createErrorResponse(
+        ERROR_CODES.FORBIDDEN,
+        'Acceso denegado',
+        { requiredRole: 'admin', userRole: admin.profile?.role }
+      );
+    }
+
+    // Leer cuerpo solo para usuarios autorizados
+    const { filePath, expiresIn = 3600, bucket } = await req.json();
     
     if (!filePath) {
       return NextResponse.json(
@@ -105,14 +127,9 @@ export async function POST(request) {
     }
 
     return NextResponse.json({
+      success: true,
       signedUrl: data.signedUrl,
       expiresAt: new Date(Date.now() + finalExpiresIn * 1000).toISOString()
     });
-
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Error interno del servidor', details: error.message },
-      { status: 500 }
-    );
-  }
+  })(request);
 }

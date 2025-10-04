@@ -137,6 +137,7 @@ const Select = React.forwardRef<HTMLDivElement, SelectProps>(
             id={selectId}
             role="combobox"
             aria-expanded={isOpen}
+            aria-controls={`${selectId}-listbox`}
             aria-haspopup="listbox"
             aria-invalid={error ? 'true' : 'false'}
             aria-describedby={cn(
@@ -182,6 +183,7 @@ const Select = React.forwardRef<HTMLDivElement, SelectProps>(
 
           {isOpen && !loading && (
             <div 
+              id={`${selectId}-listbox`}
               className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-300 bg-white py-1 shadow-lg"
               role="listbox"
               aria-labelledby={selectId}

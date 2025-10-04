@@ -32,7 +32,7 @@ async function addIsIndependentColumn() {
       // Try alternative method using direct SQL
       console.log('Trying to add column directly...');
       
-      const { data, error } = await supabase
+      const { error } = await supabase
         .rpc('exec_sql', {
           sql: `
             DO $$ 
@@ -67,7 +67,7 @@ async function addIsIndependentColumn() {
 
     console.log('Adding is_independent column...');
     
-    const { data, error } = await supabase
+    const { error } = await supabase
       .rpc('exec_sql', {
         sql: 'ALTER TABLE public.chapters ADD COLUMN is_independent boolean DEFAULT false;'
       });

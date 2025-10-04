@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import securityLogger from './securityLogger.js';
-import { logCriticalError, CRITICAL_ERROR_TYPES, SEVERITY_LEVELS } from './monitoring';
+import { logCriticalError, CRITICAL_ERROR_TYPES, SEVERITY_LEVELS } from './monitoring.js';
 
 // Standardized error codes
 export const ERROR_CODES = {

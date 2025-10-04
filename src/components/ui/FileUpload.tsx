@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback } from 'react';
-import { Upload, X, File, Image, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { Upload, X, File, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
 
 interface FileUploadProps {
@@ -51,7 +51,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const validateFile = (file: File): string | null => {
+  const validateFile = useCallback((file: File): string | null => {
     // Validar tipo de archivo
     if (!acceptedTypes.includes(file.type)) {
       return `Tipo de archivo no permitido. Tipos aceptados: ${acceptedTypes.join(', ')}`;
@@ -64,9 +64,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
     }
 
     return null;
-  };
+  }, [acceptedTypes, maxSizeInMB]);
 
-  const uploadFile = async (file: File): Promise<string> => {
+  const uploadFile = useCallback(async (file: File): Promise<string> => {
     const supabase = getSupabaseBrowserClient();
     
     // Verificar autenticación
@@ -80,7 +80,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
     // Nueva estructura: archivos organizados por usuario en bucket works
     const filePath = `${user.id}/${fileName}`;
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from('works')
       .upload(filePath, file, {
         cacheControl: '3600',
@@ -94,7 +94,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
     // Para buckets privados, devolvemos el path del archivo
     // La URL firmada se generará cuando sea necesario mostrar el archivo
     return filePath;
-  };
+  }, []);
 
   const handleFiles = useCallback(async (files: FileList) => {
     const filesToProcess = Array.from(files).slice(0, multiple ? files.length : 1);
@@ -160,7 +160,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         onError?.(errorMessage);
       }
     }
-  }, [acceptedTypes, maxSizeInMB, multiple, onFileUploaded, onError]);
+  }, [multiple, onFileUploaded, onError, validateFile, uploadFile]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();

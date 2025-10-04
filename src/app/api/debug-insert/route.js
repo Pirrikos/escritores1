@@ -2,15 +2,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getSupabaseRouteClient } from "../../../lib/supabaseServer";
-import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from "../../../lib/securityLogger";
+import { getSupabaseRouteClient } from "../../../lib/supabaseServer.js";
+import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from "../../../lib/securityLogger.js";
+import { ensureAdmin } from '../../../lib/adminAuth.server.js';
 import { 
   withErrorHandling, 
   handleAuthError, 
   handleDatabaseError,
   createErrorResponse,
   ERROR_CODES 
-} from "../../../lib/errorHandler";
+} from "../../../lib/errorHandler.js";
 
 export async function GET(request) {
   return withErrorHandling(async (req) => {
@@ -28,30 +29,29 @@ export async function GET(request) {
         "Endpoint no disponible en producción"
       );
     }
-    
-    const supabase = await getSupabaseRouteClient();
-    
-    // Verify user authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError) {
-      return handleAuthError(authError, {
-        endpoint: '/api/debug-insert',
-        action: 'getUser'
-      });
-    }
-    
-    if (!user) {
+    // Requiere permisos de administrador (RLS-safe)
+    const admin = await ensureAdmin(req);
+    if (!admin.ok) {
+      if (admin.code === 'UNAUTHORIZED') {
+        return handleAuthError(admin.error || new Error('No autenticado'), {
+          endpoint: '/api/debug-insert',
+          method: 'GET'
+        });
+      }
       return createErrorResponse(
-        ERROR_CODES.UNAUTHORIZED,
-        "Usuario no autenticado"
+        ERROR_CODES.FORBIDDEN,
+        'Acceso denegado',
+        { requiredRole: 'admin', userRole: admin.profile?.role }
       );
     }
+    
+    // Inicializar cliente Supabase solo después de validar admin
+    const supabase = await getSupabaseRouteClient();
     
     // Log admin action
     securityLogger.log(SECURITY_EVENTS.ADMIN_ACTION, SECURITY_LEVELS.INFO, {
       action: 'debug_insert',
-      userId: user.id,
+      userId: admin.user?.id,
       endpoint: '/api/debug-insert',
       userAgent: req.headers.get('user-agent'),
       ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip')
@@ -61,7 +61,7 @@ export async function GET(request) {
     const testPost = {
       title: "Post de Prueba",
       content: "Este es un post de prueba creado por el endpoint de debug.",
-      author_id: user.id,
+      author_id: admin.user?.id,
       status: "published",
       published_at: new Date().toISOString()
     };

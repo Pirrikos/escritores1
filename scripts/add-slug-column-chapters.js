@@ -100,7 +100,7 @@ END $$;`
     }
     
     // Verificar acceso a la tabla chapters
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('chapters')
       .select('id, title, slug')
       .limit(1);

@@ -2,6 +2,16 @@
 const nextConfig = {
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
+      },
+    ],
+  },
   // Configuración específica para Vercel y PDF.js
   webpack: (config, { isServer }) => {
     // Configuración para PDF.js worker en Vercel

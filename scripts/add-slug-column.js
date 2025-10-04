@@ -100,7 +100,7 @@ END $$;`
     }
     
     // Verificar acceso a la tabla works
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('works')
       .select('id, title, slug')
       .limit(1);

@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import CoverRenderer from '@/components/ui/CoverRenderer';
 import { parsePreviewCover } from '@/lib/utils';
 import { Icon, Icons } from '@/components/ui/Icon';
 import { generateSlug } from '@/lib/slugUtils';
+import Image from 'next/image';
 
 interface Chapter {
   id: string;
@@ -29,11 +30,7 @@ export default function ChaptersPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const supabase = createClientComponentClient();
 
-  useEffect(() => {
-    loadPublishedChapters();
-  }, []);
-
-  const loadPublishedChapters = async () => {
+  const loadPublishedChapters = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -69,7 +66,11 @@ export default function ChaptersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    loadPublishedChapters();
+  }, [loadPublishedChapters]);
 
 
 
@@ -91,12 +92,13 @@ export default function ChaptersPage() {
     }
   };
 
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return '';
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
-  };
+  // Validación de plantillas y paletas para evitar tipos any
+  const ALLOWED_TEMPLATES = ['template-1', 'template-2', 'template-3'] as const;
+  const ALLOWED_PALETTES = ['marino', 'rojo', 'verde', 'violeta'] as const;
+  type TemplateId = typeof ALLOWED_TEMPLATES[number];
+  type PaletteId = typeof ALLOWED_PALETTES[number];
+  const isAllowed = <T extends readonly string[]>(arr: T, val: string): val is T[number] =>
+    (arr as ReadonlyArray<string>).includes(val);
 
   if (loading) {
     return (
@@ -193,13 +195,19 @@ export default function ChaptersPage() {
                             chapter.profiles?.display_name || 'Autor Desconocido'
                           );
                           if (meta.mode === 'template') {
+                            const tId = isAllowed(ALLOWED_TEMPLATES, meta.templateId)
+                              ? meta.templateId
+                              : 'template-1';
+                            const pId = isAllowed(ALLOWED_PALETTES, meta.paletteId)
+                              ? meta.paletteId
+                              : 'marino';
                             return (
                               <CoverRenderer
                                 mode="template"
-                                templateId={meta.templateId as any}
+                                templateId={tId as TemplateId}
                                 title={meta.title}
                                 author={meta.author}
-                                paletteId={meta.paletteId as any}
+                                paletteId={pId as PaletteId}
                                 width={200}
                                 height={280}
                                 className="mx-auto mb-4 rounded-lg shadow-sm"
@@ -209,9 +217,11 @@ export default function ChaptersPage() {
                           if (meta.mode === 'image') {
                             return (
                               <div className="w-[200px] h-[280px] bg-gray-200 rounded overflow-hidden shadow-sm mx-auto mb-4">
-                                <img
+                                <Image
                                   src={meta.url}
                                   alt={`Portada de ${chapter.title}`}
+                                  width={200}
+                                  height={280}
                                   className="w-full h-full object-cover"
                                 />
                               </div>

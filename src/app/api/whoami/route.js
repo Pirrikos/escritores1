@@ -2,20 +2,19 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getSupabaseRouteClient } from "../../../lib/supabaseServer";
-import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from "../../../lib/securityLogger";
+import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from "../../../lib/securityLogger.js";
 import { 
   withErrorHandling, 
   handleAuthError, 
   createErrorResponse,
   ERROR_CODES 
-} from "../../../lib/errorHandler";
-import productionLogger, { LOG_CATEGORIES } from "../../../lib/productionLogger";
-import { PerformanceTimer } from "../../../lib/performanceMonitor";
+} from "../../../lib/errorHandler.js";
+import productionLogger, { LOG_CATEGORIES } from "../../../lib/productionLogger.js";
+import { PerformanceTimer } from "../../../lib/performanceMonitor.js";
+import { ensureAdmin } from "../../../lib/adminAuth.server.js";
 
 export async function GET(request) {
   return withErrorHandling(async (req) => {
-    // Iniciar monitoreo de rendimiento
     const performanceTimer = new PerformanceTimer('api_whoami_request', {
       method: 'GET',
       endpoint: '/api/whoami',
@@ -23,83 +22,54 @@ export async function GET(request) {
     });
 
     try {
-      const supabase = await getSupabaseRouteClient();
-      
-      // Log request for monitoring
-      securityLogger.log(SECURITY_EVENTS.API_REQUEST, SECURITY_LEVELS.INFO, {
-        endpoint: '/api/whoami',
-        method: 'GET',
+      // Log de inicio
+      productionLogger.info(LOG_CATEGORIES.API, 'Whoami request started', {
         userAgent: req.headers.get('user-agent'),
         ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip')
       });
 
-      productionLogger.info('Whoami request started', LOG_CATEGORIES.API, {
-        userAgent: req.headers.get('user-agent'),
-        ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip')
-      });
-      
-      const { data: { user }, error } = await supabase.auth.getUser();
-      
-      if (error) {
-        console.error("Error de autenticación:", error);
-        productionLogger.error('Authentication error in whoami', LOG_CATEGORIES.AUTH, {
-          error: error.message,
-          endpoint: '/api/whoami'
-        });
-        return handleAuthError(error, {
-          endpoint: '/api/whoami',
-          action: 'getUser'
-        });
-      }
-      
-      if (!user) {
-        securityLogger.logSuspicious(SECURITY_EVENTS.SUSPICIOUS_PATTERN, {
-          pattern: 'unauthenticated_whoami_request',
-          endpoint: '/api/whoami',
-          userAgent: req.headers.get('user-agent'),
-          ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip')
-        });
+      // Usar flujo centralizado de admin con fallbacks seguros
+      const admin = await ensureAdmin(req);
 
-        productionLogger.warn('Unauthenticated whoami request', LOG_CATEGORIES.SECURITY, {
-          userAgent: req.headers.get('user-agent'),
-          ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip')
-        });
-        
+      if (!admin.ok) {
+        if (admin.code === 'UNAUTHORIZED') {
+          return handleAuthError(admin.error || new Error('No autenticado'), {
+            endpoint: '/api/whoami',
+            method: 'GET'
+          });
+        }
         return createErrorResponse(
-          ERROR_CODES.UNAUTHORIZED,
-          "Usuario no autenticado"
+          ERROR_CODES.FORBIDDEN,
+          'Acceso denegado',
+          { requiredRole: 'admin', userRole: admin.profile?.role }
         );
       }
 
-      // Log successful user identification
-      productionLogger.info('User identified successfully', LOG_CATEGORIES.USER_ACTION, {
-        userId: user.id,
-        email: user.email
+      // Log de éxito
+      productionLogger.info(LOG_CATEGORIES.USER_ACTION, 'User identified successfully', {
+        userId: admin.user.id,
+        email: admin.user.email
       });
 
-      // End performance timer
-      performanceTimer.end();
-      
+      const duration = performanceTimer.end();
+      productionLogger.logAPIRequest('GET', '/api/whoami', admin.user.id, duration, 200);
+
       return NextResponse.json({
         success: true,
         user: {
-          id: user.id,
-          email: user.email,
-          user_metadata: user.user_metadata
+          id: admin.user.id,
+          email: admin.user.email,
+          user_metadata: admin.user.user_metadata
         }
       });
-
     } catch (error) {
-      // End performance timer in case of error
       performanceTimer.end();
-      
-      productionLogger.error('Unexpected error in whoami endpoint', LOG_CATEGORIES.API, {
+      productionLogger.error(LOG_CATEGORIES.API, 'Unexpected error in whoami endpoint', {
         error: error.message,
         stack: error.stack,
         endpoint: '/api/whoami'
       });
-      
-      throw error;
+      return handleAuthError(error, { endpoint: '/api/whoami', method: 'GET' });
     }
   })(request);
 }

@@ -46,7 +46,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     const isDisabled = disabled || loading;
 
     // Auto-resize functionality
-    const adjustHeight = () => {
+    const adjustHeight = React.useCallback(() => {
       const textarea = textareaRef.current;
       if (!textarea || !autoResize) return;
 
@@ -62,7 +62,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
       // Set the new height within bounds
       const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
       textarea.style.height = `${newHeight}px`;
-    };
+    }, [autoResize, minRows, maxRows]);
 
     // Handle change with auto-resize
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -75,12 +75,12 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     // Adjust height on value change
     useEffect(() => {
       adjustHeight();
-    }, [value, autoResize]);
+    }, [value, adjustHeight]);
 
     // Adjust height on mount
     useEffect(() => {
       adjustHeight();
-    }, []);
+    }, [adjustHeight]);
 
     return (
       <div className={cn('space-y-2', fullWidth && 'w-full')}>

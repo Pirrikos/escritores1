@@ -2,33 +2,21 @@ import { NextResponse } from 'next/server';
 import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler';
 import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from '@/lib/securityLogger';
 import { getRateLimitStats, withRateLimit } from '@/lib/rateLimiter';
-import { createServerSupabaseClient } from '@/lib/supabaseServer';
+import { ensureAdmin } from '@/lib/adminAuth.server';
 
 async function GET(request) {
   try {
-    const supabase = createServerSupabaseClient();
-    
-    // Verificar autenticación y permisos de admin
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    if (authError || !session?.user) {
-      return handleAuthError('Usuario no autenticado');
-    }
-
-    // Verificar si el usuario es admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single();
-
-    if (profile?.role !== 'admin') {
+    const admin = await ensureAdmin(request);
+    if (!admin.ok) {
+      if (admin.code === 'UNAUTHORIZED') {
+        return handleAuthError(admin.error || new Error('Usuario no autenticado'));
+      }
       securityLogger.log(SECURITY_EVENTS.UNAUTHORIZED_ACCESS, SECURITY_LEVELS.WARNING, {
-        userId: session.user.id,
+        userId: admin.user?.id,
         endpoint: '/api/monitoring/rate-limits',
         attemptedAction: 'view_rate_limit_stats',
         ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
       });
-      
       return createErrorResponse(
         ERROR_CODES.FORBIDDEN,
         'Acceso denegado. Se requieren permisos de administrador.'
@@ -40,7 +28,7 @@ async function GET(request) {
     
     // Log acceso a estadísticas
     securityLogger.log(SECURITY_EVENTS.ADMIN_ACTION, SECURITY_LEVELS.INFO, {
-      userId: session.user.id,
+      userId: admin.user.id,
       action: 'view_rate_limit_stats',
       endpoint: '/api/monitoring/rate-limits'
     });

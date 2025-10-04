@@ -3,47 +3,40 @@
  * Permite a los administradores controlar el estado del sistema de backup
  */
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabaseServer';
+import { ensureAdmin } from '../../../lib/adminAuth.server';
 import { 
   safeInitializeBackup, 
   safeStopBackup, 
   restartBackupSystem,
   getBackupSystemStatus 
-} from '@/lib/backupInitializer';
+} from '../../../lib/backupInitializer';
 import { 
   withErrorHandling, 
   createErrorResponse, 
   handleAuthError,
   ERROR_CODES 
-} from '@/lib/errorHandler';
+} from '../../../lib/errorHandler';
 
 /**
  * GET - Obtener estado del sistema de backup
  */
 export async function GET(request) {
   return withErrorHandling(async () => {
-    const supabase = createServerSupabaseClient();
 
-    // Verificar autenticación y permisos de admin
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return handleAuthError(authError || new Error('No autenticado'));
-    }
-
-    // Verificar rol de administrador
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.role !== 'admin') {
+    // Autenticación y verificación de admin centralizada
+    const admin = await ensureAdmin(request);
+    if (!admin.ok) {
+      if (admin.code === 'UNAUTHORIZED') {
+        return handleAuthError(admin.error || new Error('No autenticado'));
+      }
       return createErrorResponse(
-        'Acceso denegado',
-        403,
         ERROR_CODES.FORBIDDEN,
-        { requiredRole: 'admin', userRole: profile?.role }
+        'Acceso denegado',
+        { requiredRole: 'admin', userRole: admin.profile?.role }
       );
     }
 
@@ -61,7 +54,7 @@ export async function GET(request) {
             : 'Sistema de backup detenido'
       }
     });
-  });
+  })(request);
 }
 
 /**
@@ -69,27 +62,17 @@ export async function GET(request) {
  */
 export async function POST(request) {
   return withErrorHandling(async () => {
-    const supabase = createServerSupabaseClient();
-    
-    // Verificar autenticación y permisos de admin
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return handleAuthError(authError || new Error('No autenticado'));
-    }
 
-    // Verificar rol de administrador
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.role !== 'admin') {
+    // Autenticación y verificación de admin centralizada
+    const admin = await ensureAdmin(request);
+    if (!admin.ok) {
+      if (admin.code === 'UNAUTHORIZED') {
+        return handleAuthError(admin.error || new Error('No autenticado'));
+      }
       return createErrorResponse(
-        'Acceso denegado',
-        403,
         ERROR_CODES.FORBIDDEN,
-        { requiredRole: 'admin', userRole: profile?.role }
+        'Acceso denegado',
+        { requiredRole: 'admin', userRole: admin.profile?.role }
       );
     }
 
@@ -112,9 +95,8 @@ export async function POST(request) {
             });
           } else {
             return createErrorResponse(
+              ERROR_CODES.INTERNAL_ERROR,
               'Error inicializando sistema de backup',
-              500,
-              ERROR_CODES.SYSTEM_ERROR,
               { 
                 reason: result.reason,
                 details: result
@@ -123,9 +105,8 @@ export async function POST(request) {
           }
         } catch (error) {
           return createErrorResponse(
+            ERROR_CODES.INTERNAL_ERROR,
             'Error crítico inicializando backup',
-            500,
-            ERROR_CODES.SYSTEM_ERROR,
             { error: error.message }
           );
         }
@@ -143,9 +124,8 @@ export async function POST(request) {
           });
         } catch (error) {
           return createErrorResponse(
+            ERROR_CODES.INTERNAL_ERROR,
             'Error deteniendo sistema de backup',
-            500,
-            ERROR_CODES.SYSTEM_ERROR,
             { error: error.message }
           );
         }
@@ -162,9 +142,8 @@ export async function POST(request) {
             });
           } else {
             return createErrorResponse(
+              ERROR_CODES.INTERNAL_ERROR,
               'Error reiniciando sistema de backup',
-              500,
-              ERROR_CODES.SYSTEM_ERROR,
               { 
                 error: result.error,
                 details: result
@@ -173,9 +152,8 @@ export async function POST(request) {
           }
         } catch (error) {
           return createErrorResponse(
+            ERROR_CODES.INTERNAL_ERROR,
             'Error crítico reiniciando backup',
-            500,
-            ERROR_CODES.SYSTEM_ERROR,
             { error: error.message }
           );
         }
@@ -189,14 +167,13 @@ export async function POST(request) {
 
       default:
         return createErrorResponse(
-          'Acción no válida',
-          400,
           ERROR_CODES.VALIDATION_ERROR,
+          'Acción no válida',
           { 
             allowedActions: ['start', 'initialize', 'stop', 'restart', 'status'],
             providedAction: action
           }
         );
     }
-  });
+  })(request);
 }

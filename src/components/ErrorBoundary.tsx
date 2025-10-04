@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { logSuspiciousActivity, SecurityEventTypes, SecuritySeverity } from '@/lib/securityLogger';
+import { logSuspiciousActivity, SecuritySeverity } from '@/lib/securityLogger';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -315,7 +315,7 @@ export const ApiErrorBoundary: React.FC<{ children: React.ReactNode }> = ({ chil
         // sendToMonitoringService({ error, errorInfo, errorId, type: 'api' });
       }
     }}
-    fallback={({ error, resetError, errorId }) => (
+    fallback={({ resetError, errorId }) => (
       <div className="p-4 bg-red-50 border border-red-200 rounded-md">
         <h3 className="text-red-800 font-medium mb-2">Error de API</h3>
         <p className="text-red-600 text-sm mb-3">

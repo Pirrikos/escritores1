@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSupabaseRouteClient } from "../../../lib/supabaseServer";
-import { sanitizeSearchQuery, normalizeText, sanitizeQueryParams } from "../../../lib/sanitization";
-import { validateObject, feedQuerySchema, queryParamsSchema } from "../../../lib/validation";
+import { sanitizeQueryParams } from "../../../lib/sanitization";
+import { validateObject, queryParamsSchema } from "../../../lib/validation";
 import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from "../../../lib/securityLogger";
 import { 
-  withErrorHandling, 
-  handleAuthError, 
   handleValidationError, 
   handleDatabaseError,
   createErrorResponse,
@@ -13,7 +11,6 @@ import {
 } from "../../../lib/errorHandler";
 import { withRateLimit } from "../../../lib/rateLimiter";
 import productionLogger, { LOG_CATEGORIES } from "../../../lib/productionLogger";
-import { createPerformanceMiddleware, monitorDatabaseOperation } from "../../../lib/performanceMonitor";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

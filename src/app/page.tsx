@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useCallback } from 'react';
 import PostsCarousel from '@/components/ui/PostsCarousel';
 import WorksCarousel from '@/components/ui/WorksCarousel';
 import ChaptersCarousel from '@/components/ui/ChaptersCarousel';
@@ -48,7 +49,6 @@ interface Chapter {
 
 function HomePageContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const supabase = createClientComponentClient();
 
   // Estados para los datos
@@ -58,7 +58,7 @@ function HomePageContent() {
   const [loading, setLoading] = useState(true);
 
   // Función para cargar posts desde la API
-  const loadPosts = async () => {
+  const loadPosts = useCallback(async () => {
     try {
       const response = await fetch('/api/feed?limit=10&status=published');
       if (response.ok) {
@@ -71,10 +71,10 @@ function HomePageContent() {
     } catch (error) {
       console.error('Error cargando posts:', error);
     }
-  };
+  }, []);
 
   // Función para cargar obras
-  const loadWorks = async () => {
+  const loadWorks = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('works')
@@ -98,10 +98,10 @@ function HomePageContent() {
     } catch (error) {
       console.error('Error cargando obras:', error);
     }
-  };
+  }, [supabase]);
 
   // Función para cargar capítulos
-  const loadChapters = async () => {
+  const loadChapters = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('chapters')
@@ -127,7 +127,7 @@ function HomePageContent() {
     } catch (error) {
       console.error('Error cargando capítulos:', error);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
@@ -149,12 +149,12 @@ function HomePageContent() {
         
         try {
           // Usar getSession() que maneja automáticamente el intercambio PKCE
-          const { data, error } = await supabase.auth.getSession();
+          const { error } = await supabase.auth.getSession();
           
           if (error) {
             console.error('Error al obtener sesión:', error);
             // Intentar manejar el callback manualmente
-            const { data: authData, error: authError } = await supabase.auth.getUser();
+            const { error: authError } = await supabase.auth.getUser();
             if (authError) {
               console.error('Error al obtener usuario:', authError);
               router.push('/auth/login?error=auth_callback_error');
@@ -207,7 +207,7 @@ function HomePageContent() {
     } else {
       loadData();
     }
-  }, [router, supabase]);
+  }, [router, supabase, loadPosts, loadWorks, loadChapters]);
 
 
 

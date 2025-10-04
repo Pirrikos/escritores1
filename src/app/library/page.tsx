@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import CoverRenderer from '@/components/ui/CoverRenderer';
 import { Icon, Icons } from '@/components/ui';
 import Link from 'next/link';
 import { generateSlug } from '@/lib/slugUtils';
+import Image from 'next/image';
 
 interface Work {
   id: string;
@@ -25,11 +26,7 @@ export default function LibraryPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const supabase = createClientComponentClient();
 
-  useEffect(() => {
-    loadPublishedWorks();
-  }, []);
-
-  const loadPublishedWorks = async () => {
+  const loadPublishedWorks = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -62,7 +59,11 @@ export default function LibraryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    loadPublishedWorks();
+  }, [loadPublishedWorks]);
 
   const scrollLeft = () => {
     if (scrollContainerRef.current) {
@@ -174,18 +175,26 @@ export default function LibraryPage() {
                       // Renderizar portada desde configuración de preview
                       (() => {
                         const parts = work.cover_url.split(':');
-                        const templateId = parts[1];
-                        const paletteId = parts[2];
+                        const templateIdRaw = parts[1];
+                        const paletteIdRaw = parts[2];
                         const encodedTitle = parts[3];
                         const encodedAuthor = parts[4];
+                        const validTemplateIds = ['template-1','template-2','template-3'] as const;
+                        const validPaletteIds = ['marino','rojo','verde','morado'] as const;
+                        const templateId = (validTemplateIds as readonly string[]).includes(templateIdRaw)
+                          ? (templateIdRaw as typeof validTemplateIds[number])
+                          : 'template-1';
+                        const paletteId = (validPaletteIds as readonly string[]).includes(paletteIdRaw)
+                          ? (paletteIdRaw as typeof validPaletteIds[number])
+                          : 'marino';
                         
                         return (
                           <CoverRenderer
                             mode="template"
-                            templateId={templateId as any}
+                            templateId={templateId}
                             title={decodeURIComponent(encodedTitle || work.title)}
                             author={decodeURIComponent(encodedAuthor || 'Autor')}
-                            paletteId={paletteId as any}
+                            paletteId={paletteId}
                             width={180}
                             height={270}
                             className="shadow-md rounded-sm"
@@ -194,11 +203,13 @@ export default function LibraryPage() {
                       })()
                     ) : (
                       // Portada personalizada subida
-                      <div className="w-[180px] h-[270px] bg-gray-200 rounded overflow-hidden shadow-md">
-                        <img 
-                          src={supabase.storage.from('works').getPublicUrl(work.cover_url).data.publicUrl} 
+                      <div className="relative w-[180px] h-[270px] bg-gray-200 rounded overflow-hidden shadow-md">
+                        <Image 
+                          src={supabase.storage.from('works').getPublicUrl(work.cover_url).data.publicUrl}
                           alt={`Portada de ${work.title}`}
-                          className="w-full h-full object-cover"
+                          fill
+                          sizes="180px"
+                          className="object-cover"
                         />
                       </div>
                     )
