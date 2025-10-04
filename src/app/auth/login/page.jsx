@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from 'next/navigation';
 import { getSupabaseBrowserClient } from "../../../lib/supabaseClient";
 import { Button, Icon, Icons } from "@/components/ui";
+import { isAdminUser } from '@/lib/adminAuth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,12 +41,20 @@ export default function LoginPage() {
   }, [supabase]);
 
   const handleRedirectAfterLogin = () => {
-    // Obtener la URL de redirección guardada
     const redirectUrl = localStorage.getItem('redirectAfterLogin');
     localStorage.removeItem('redirectAfterLogin');
-    
-    // Redirigir a la URL guardada o al admin por defecto
-    router.push(redirectUrl || '/admin');
+
+    // Si hay sesión y es admin, respetar redirección a /admin; si no, ir a Home
+    if (session && isAdminUser(session)) {
+      router.push(redirectUrl || '/admin');
+    } else {
+      // Si había una redirección previa que no es admin, úsala; si era admin, ignórala
+      if (redirectUrl && !redirectUrl.startsWith('/admin')) {
+        router.push(redirectUrl);
+      } else {
+        router.push('/home');
+      }
+    }
   };
 
   const signInWithGoogle = async () => {
@@ -128,7 +137,7 @@ export default function LoginPage() {
             onClick={handleRedirectAfterLogin}
             className="w-full"
           >
-            Continuar al Panel de Administración
+            Continuar
           </Button>
         </div>
       </div>

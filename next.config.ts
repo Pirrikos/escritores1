@@ -13,7 +13,7 @@ const nextConfig = {
     ],
   },
   // Configuración específica para Vercel y PDF.js
-  webpack: (config, { isServer }) => {
+  webpack: (config: any, { isServer }: { isServer: boolean }) => {
     // Configuración para PDF.js worker en Vercel
     if (!isServer) {
       config.resolve.fallback = {
@@ -26,6 +26,10 @@ const nextConfig = {
   },
   // Headers para permitir workers y WASM
   async headers() {
+    // Evitar cabeceras COEP/COOP en desarrollo para compatibilidad con webviews/iframes
+    if (process.env.NODE_ENV !== 'production') {
+      return [];
+    }
     return [
       {
         source: '/(.*)',

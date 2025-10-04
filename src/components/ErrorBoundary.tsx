@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { logSuspiciousActivity, SecuritySeverity } from '@/lib/securityLogger';
+import { logSuspiciousActivity } from '@/lib/securityLogger';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -53,9 +53,8 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     if (this.isSecurityRelatedError(error)) {
       logSuspiciousActivity(
         'client_error',
-        `Potential security-related error: ${error.message}`,
-        SecuritySeverity.MEDIUM,
         {
+          message: `Potential security-related error: ${error.message}`,
           errorId,
           errorMessage: error.message,
           errorStack: error.stack,
@@ -244,9 +243,8 @@ export const useErrorHandler = () => {
     if (isSecurityRelatedError(error)) {
       logSuspiciousActivity(
         'client_error',
-        `Potential security-related error in component: ${error.message}`,
-        SecuritySeverity.MEDIUM,
         {
+          message: `Potential security-related error in component: ${error.message}`,
           errorMessage: error.message,
           errorStack: error.stack,
           retryCount

@@ -87,6 +87,12 @@ export function ViewDownloadButton({
         return;
       }
 
+      // Si es una portada generada (preview:...), no existe un archivo en storage
+      if (filePath.startsWith('preview:')) {
+        setFileExists(false);
+        return;
+      }
+
       // Solo generar URL firmada para rutas de bucket si filePath no está vacío
       if (!filePath || filePath.trim() === '' || filePath === 'NULL' || filePath === 'null') {
         setFileExists(false);
@@ -175,6 +181,14 @@ export function ViewDownloadButton({
       if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
         urlToUse = filePath;
         setActualFileUrl(filePath);
+      } else if (filePath.startsWith('preview:')) {
+        // Portada generada no disponible como archivo descargable
+        addToast({
+          type: 'warning',
+          message: 'Esta portada es generada y no está disponible como archivo.'
+        });
+        setFileExists(false);
+        return;
       } else {
         // Solo generar URL firmada para rutas de bucket
         try {
@@ -244,6 +258,14 @@ export function ViewDownloadButton({
       if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
         urlToUse = filePath;
         setActualFileUrl(filePath);
+      } else if (filePath.startsWith('preview:')) {
+        // Portada generada no disponible como archivo descargable
+        setFileExists(false);
+        addToast({
+          type: 'warning',
+          message: 'Esta portada es generada y no está disponible para descarga.'
+        });
+        return;
       } else {
         // Solo generar URL firmada para rutas de bucket
         try {

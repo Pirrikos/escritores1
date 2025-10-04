@@ -8,6 +8,8 @@ import { useCallback } from 'react';
 import PostsCarousel from '@/components/ui/PostsCarousel';
 import WorksCarousel from '@/components/ui/WorksCarousel';
 import ChaptersCarousel from '@/components/ui/ChaptersCarousel';
+import { AppHeader } from '@/components/ui';
+import { isAdminUser } from '@/lib/adminAuth';
 
 // Interfaces para los tipos de datos
 interface Post {
@@ -50,6 +52,7 @@ interface Chapter {
 function HomePageContent() {
   const router = useRouter();
   const supabase = createClientComponentClient();
+  const [session, setSession] = useState<any>(null);
 
   // Estados para los datos
   const [posts, setPosts] = useState<Post[]>([]);
@@ -94,7 +97,22 @@ function HomePageContent() {
         .limit(10);
 
       if (error) throw error;
-      setWorks(data || []);
+      // Normalizar profiles: Supabase puede devolver arrays en relaciones
+      const normalizeProfile = (p: any) => {
+        if (Array.isArray(p)) {
+          return { display_name: p[0]?.display_name ?? 'Autor desconocido' };
+        }
+        if (p && typeof p === 'object' && 'display_name' in p) {
+          return p as { display_name: string };
+        }
+        return { display_name: 'Autor desconocido' };
+      };
+
+      const normalized = (data || []).map((w: any) => ({
+        ...w,
+        profiles: normalizeProfile(w?.profiles),
+      }));
+      setWorks(normalized);
     } catch (error) {
       console.error('Error cargando obras:', error);
     }
@@ -123,13 +141,36 @@ function HomePageContent() {
         .limit(10);
 
       if (error) throw error;
-      setChapters(data || []);
+      // Normalizar profiles igual que en obras
+      const normalizeProfile = (p: any) => {
+        if (Array.isArray(p)) {
+          return { display_name: p[0]?.display_name ?? 'Autor desconocido' };
+        }
+        if (p && typeof p === 'object' && 'display_name' in p) {
+          return p as { display_name: string };
+        }
+        return { display_name: 'Autor desconocido' };
+      };
+
+      const normalized = (data || []).map((c: any) => ({
+        ...c,
+        profiles: normalizeProfile(c?.profiles),
+      }));
+      setChapters(normalized);
     } catch (error) {
       console.error('Error cargando capítulos:', error);
     }
   }, [supabase]);
 
   useEffect(() => {
+    // Obtener sesión y suscribirse a cambios de auth
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session || null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setSession(s);
+    });
+
     const handleOAuthCallback = async () => {
       // Verificar si hay parámetros de OAuth en la URL
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -202,11 +243,21 @@ function HomePageContent() {
 
     // Solo ejecutar si hay parámetros OAuth
     const hasOAuthParams = window.location.search.includes('code') || window.location.hash.includes('code');
+
+    // Si no hay OAuth y estamos en '/', redirigir a /home como página principal
+    if (!hasOAuthParams && typeof window !== 'undefined' && window.location.pathname === '/') {
+      router.replace('/home');
+      return;
+    }
+
     if (hasOAuthParams) {
       handleOAuthCallback();
     } else {
       loadData();
     }
+    return () => {
+      try { sub?.subscription?.unsubscribe?.(); } catch {}
+    };
   }, [router, supabase, loadPosts, loadWorks, loadChapters]);
 
 
@@ -214,28 +265,8 @@ function HomePageContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <header className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">
-            Bienvenido a Escritores
-          </h1>
-          <p className="text-xl text-gray-700 mb-8 max-w-2xl mx-auto">
-            Descubre historias, obras completas y capítulos independientes de nuestros talentosos escritores.
-          </p>
-          
-          <nav role="navigation" aria-label="Navegación principal">
-            <Link 
-              href="/admin" 
-              className="bg-purple-600 hover:bg-purple-700 focus:bg-purple-700 text-white px-8 py-4 rounded-lg text-lg font-medium transition-colors inline-block focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 shadow-lg"
-              aria-describedby="admin-description"
-            >
-              Ir al Panel de Administración
-            </Link>
-            <p id="admin-description" className="sr-only">
-              Accede al panel de administración para gestionar tu contenido y configuración
-            </p>
-          </nav>
-        </header>
+        {/* Header principal con avatar y menú */}
+        <AppHeader className="mb-12" />
 
         {loading ? (
           <div className="text-center py-12">

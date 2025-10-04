@@ -2,7 +2,19 @@
 
 import { parsePreviewCover } from '@/lib/utils';
 
-const samples = [
+type Sample = {
+  name: string;
+  input?: string;
+  titleFallback: string;
+  authorFallback: string;
+  expect: {
+    mode: 'template' | 'image' | 'auto';
+    templateId?: string;
+    paletteId?: string;
+  };
+};
+
+const samples: Sample[] = [
   {
     name: 'Preview completo',
     input:
@@ -27,17 +39,6 @@ const samples = [
   },
 ];
 
-type Sample = {
-  name: string;
-  input?: string;
-  titleFallback: string;
-  authorFallback: string;
-  expect: {
-    mode: 'template' | 'image' | 'auto';
-    templateId?: string;
-    paletteId?: string;
-  };
-};
 
 function ResultRow({ name, input, titleFallback, authorFallback, expect }: Sample) {
   const meta = parsePreviewCover(input, titleFallback, authorFallback);

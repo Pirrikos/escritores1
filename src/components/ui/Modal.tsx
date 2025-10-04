@@ -54,9 +54,8 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
       modalRef.current = node;
       if (typeof _ref === 'function') {
         _ref(node);
-      } else if (_ref && 'current' in _ref) {
-        // @ts-expect-error generic forwarded ref assignment
-        _ref.current = node;
+      } else if (_ref) {
+        ( _ref as React.MutableRefObject<HTMLDivElement | null> ).current = node;
       }
     };
 

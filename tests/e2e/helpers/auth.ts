@@ -42,6 +42,7 @@ export async function getAdminCookies(): Promise<Cookie[] | null> {
       httpOnly: true,
       sameSite: 'Lax',
       secure,
+      expires: Math.floor(Date.now() / 1000) + 3600,
     },
     {
       name: 'sb:refresh-token',
@@ -51,6 +52,7 @@ export async function getAdminCookies(): Promise<Cookie[] | null> {
       httpOnly: true,
       sameSite: 'Lax',
       secure,
+      expires: Math.floor(Date.now() / 1000) + 3600,
     },
     {
       name: 'sb-access-token',
@@ -60,6 +62,7 @@ export async function getAdminCookies(): Promise<Cookie[] | null> {
       httpOnly: true,
       sameSite: 'Lax',
       secure,
+      expires: Math.floor(Date.now() / 1000) + 3600,
     },
     {
       name: 'sb-refresh-token',
@@ -69,6 +72,7 @@ export async function getAdminCookies(): Promise<Cookie[] | null> {
       httpOnly: true,
       sameSite: 'Lax',
       secure,
+      expires: Math.floor(Date.now() / 1000) + 3600,
     },
   ];
 

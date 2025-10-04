@@ -112,8 +112,16 @@ function ChapterDetailPageContent({
         return;
       }
 
+      // Normalizar tipo de profiles (algunas respuestas lo devuelven como array)
+      const normalizedChapters: Chapter[] = (data || []).map((d: any) => ({
+        ...d,
+        profiles: Array.isArray(d.profiles)
+          ? (d.profiles[0] ?? { display_name: '' })
+          : d.profiles,
+      }));
+
       // Buscar el capítulo que coincida con el slug
-      const foundChapter = data?.find((c: Chapter) => {
+      const foundChapter = normalizedChapters.find((c) => {
         // Si el capítulo tiene slug guardado, usarlo; si no, generar uno
         const generatedSlug = c.slug || generateSlug(c.title);
         return generatedSlug === chapterSlug;
@@ -205,16 +213,22 @@ function ChapterDetailPageContent({
                         const encodedTitle = parts[3];
                         const encodedAuthor = parts[4];
                         const ALLOWED_TEMPLATES = ['template-1', 'template-2', 'template-3'] as const;
-                        const ALLOWED_PALETTES = ['marino', 'rojo', 'verde', 'violeta'] as const;
+                        const ALLOWED_PALETTES = ['marino', 'rojo', 'negro', 'verde', 'purpura'] as const;
                         type TemplateId = typeof ALLOWED_TEMPLATES[number];
                         type PaletteId = typeof ALLOWED_PALETTES[number];
                         const isAllowed = <T extends readonly string[]>(arr: T, val: string): val is T[number] =>
                           (arr as ReadonlyArray<string>).includes(val);
                         const tId = isAllowed(ALLOWED_TEMPLATES, templateId) ? templateId : 'template-1';
-                        const pId = isAllowed(ALLOWED_PALETTES, paletteId) ? paletteId : 'marino';
+                        const normalizePalette = (id: string): PaletteId => {
+                          const synonyms: Record<string, PaletteId> = { violeta: 'purpura', morado: 'purpura' };
+                          const candidate = synonyms[id] || id;
+                          return isAllowed(ALLOWED_PALETTES, candidate) ? candidate : 'marino';
+                        };
+                        const pId = normalizePalette(paletteId);
                         
                         return (
                           <CoverRenderer
+                            mode="template"
                             templateId={tId as TemplateId}
                             title={decodeURIComponent(encodedTitle || chapter.title)}
                             author={decodeURIComponent(encodedAuthor || chapter.profiles.display_name)}
@@ -323,15 +337,18 @@ function ChapterDetailPageContent({
                 {/* Action Buttons */}
                 <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex flex-col sm:flex-row gap-4">
-                    <ViewDownloadButton
-                      filePath={chapter.cover_url || ''}
-                      fileName={`${chapter.title} - Portada`}
-                      fileType="image"
-                      bucket="chapters"
-                      viewOnly={true}
-                      size="lg"
-                      className="flex-1"
-                    />
+                    {/* Mostrar botón de portada solo si es un archivo real en storage */}
+                    {chapter.cover_url && !chapter.cover_url.startsWith('preview:') && (
+                      <ViewDownloadButton
+                        filePath={chapter.cover_url}
+                        fileName={`${chapter.title} - Portada`}
+                        fileType="image"
+                        bucket="chapters"
+                        viewOnly={true}
+                        size="lg"
+                        className="flex-1"
+                      />
+                    )}
                     
                     {/* Botones para ver y descargar el capítulo completo */}
                     <ViewDownloadButton

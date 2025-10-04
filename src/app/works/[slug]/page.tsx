@@ -106,8 +106,18 @@ function WorkDetailPageContent({
         return;
       }
 
-      // Buscar la obra que coincida con el slug
-      const foundWork = data?.find((w: Work) => generateSlug(w.title) === workSlug);
+      // Normalizar perfiles y buscar la obra que coincida con el slug
+      const normalizeProfile = (profiles: any): { display_name: string } => {
+        const p = Array.isArray(profiles) ? profiles[0] : profiles;
+        return { display_name: p?.display_name || 'Autor desconocido' };
+      };
+
+      const normalizedWorks: Work[] = (data || []).map((row: any) => ({
+        ...row,
+        profiles: normalizeProfile(row.profiles)
+      }));
+
+      const foundWork = normalizedWorks.find((w) => generateSlug(w.title) === workSlug);
 
       if (!foundWork) {
         setError('Obra no encontrada');
@@ -195,16 +205,22 @@ function WorkDetailPageContent({
                         const encodedTitle = parts[3];
                         const encodedAuthor = parts[4];
                         const validTemplateIds = ['template-1','template-2','template-3'] as const;
-                        const validPaletteIds = ['marino','rojo','verde','morado'] as const;
+                        const validPaletteIds = ['marino','rojo','verde','negro','purpura'] as const;
                         const templateId = (validTemplateIds as readonly string[]).includes(templateIdRaw)
                           ? (templateIdRaw as typeof validTemplateIds[number])
                           : 'template-1';
-                        const paletteId = (validPaletteIds as readonly string[]).includes(paletteIdRaw)
-                          ? (paletteIdRaw as typeof validPaletteIds[number])
-                          : 'marino';
+                        const normalizePalette = (p?: string) => {
+                          const synonyms: Record<string, string> = { morado: 'purpura' };
+                          const candidate = synonyms[p || ''] || p;
+                          return (validPaletteIds as readonly string[]).includes(candidate as string)
+                            ? (candidate as typeof validPaletteIds[number])
+                            : 'marino';
+                        };
+                        const paletteId = normalizePalette(paletteIdRaw);
                         
                         return (
                           <CoverRenderer
+                            mode="template"
                             templateId={templateId}
                             title={decodeURIComponent(encodedTitle || work.title)}
                             author={decodeURIComponent(encodedAuthor || work.profiles.display_name)}
@@ -308,15 +324,18 @@ function WorkDetailPageContent({
                 {/* Action Buttons */}
                 <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex flex-col sm:flex-row gap-4">
-                    <ViewDownloadButton
-                      filePath={work.cover_url || ''}
-                      fileName={`${work.title} - Portada`}
-                      fileType="image"
-                      bucket="works"
-                      viewOnly={true}
-                      size="lg"
-                      className="flex-1"
-                    />
+                    {/* Mostrar botón de portada solo si es un archivo real en storage */}
+                    {work.cover_url && !work.cover_url.startsWith('preview:') && (
+                      <ViewDownloadButton
+                        filePath={work.cover_url}
+                        fileName={`${work.title} - Portada`}
+                        fileType="image"
+                        bucket="works"
+                        viewOnly={true}
+                        size="lg"
+                        className="flex-1"
+                      />
+                    )}
                     
                     {/* Botón para ver y descargar la obra completa */}
                     <ViewDownloadButton

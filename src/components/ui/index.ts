@@ -29,5 +29,7 @@ export { Icon, Icons } from './Icon';
 export { ViewDownloadButton } from './ViewDownloadButton';
 export type { ViewDownloadButtonProps } from './ViewDownloadButton';
 
+export { default as AppHeader } from './AppHeader';
+
 // Utility functions
 export { cn } from '../../lib/utils';

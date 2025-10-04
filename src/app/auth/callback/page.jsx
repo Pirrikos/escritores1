@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
+import { isAdminUser } from '@/lib/adminAuth';
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -47,14 +48,22 @@ function AuthCallbackContent() {
             console.log('Sesión establecida exitosamente:', sessionData.session.user.email);
             setStatus(`Sesión establecida para ${sessionData.session.user.email}`);
             
-            setStatus('Redirigiendo al panel de administración...');
+            setStatus('Redirigiendo...');
             
             // Obtener la URL de redirección guardada
             const redirectUrl = localStorage.getItem('redirectAfterLogin');
             localStorage.removeItem('redirectAfterLogin');
             
-            // Redirigir a la URL guardada o al admin por defecto
-            router.push(redirectUrl || '/admin');
+            // Redirigir según rol: admin respeta /admin; no admin va a Home
+            if (isAdminUser(sessionData.session)) {
+              router.push(redirectUrl || '/admin');
+            } else {
+              if (redirectUrl && !redirectUrl.startsWith('/admin')) {
+                router.push(redirectUrl);
+              } else {
+                router.push('/home');
+              }
+            }
           } else {
             console.error('No se pudo establecer la sesión después del callback');
             setStatus('Error: No se pudo establecer la sesión');

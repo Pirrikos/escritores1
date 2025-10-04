@@ -59,7 +59,13 @@ export default function ChaptersPage() {
         return;
       }
 
-      setChapters(data || []);
+      const normalized = (data || []).map((ch: any) => ({
+        ...ch,
+        profiles: Array.isArray(ch.profiles)
+          ? (ch.profiles[0] || { display_name: 'Autor Desconocido' })
+          : ch.profiles
+      }));
+      setChapters(normalized as Chapter[]);
     } catch (err) {
       console.error('Error:', err);
       setError('Error al cargar los capítulos');
@@ -94,11 +100,16 @@ export default function ChaptersPage() {
 
   // Validación de plantillas y paletas para evitar tipos any
   const ALLOWED_TEMPLATES = ['template-1', 'template-2', 'template-3'] as const;
-  const ALLOWED_PALETTES = ['marino', 'rojo', 'verde', 'violeta'] as const;
+  const ALLOWED_PALETTES = ['marino', 'rojo', 'negro', 'verde', 'purpura'] as const;
   type TemplateId = typeof ALLOWED_TEMPLATES[number];
   type PaletteId = typeof ALLOWED_PALETTES[number];
   const isAllowed = <T extends readonly string[]>(arr: T, val: string): val is T[number] =>
     (arr as ReadonlyArray<string>).includes(val);
+  const normalizePalette = (id: string): PaletteId => {
+    const synonyms: Record<string, PaletteId> = { violeta: 'purpura', morado: 'purpura' };
+    const candidate = synonyms[id] || id;
+    return isAllowed(ALLOWED_PALETTES, candidate) ? (candidate as PaletteId) : 'marino';
+  };
 
   if (loading) {
     return (
@@ -198,9 +209,7 @@ export default function ChaptersPage() {
                             const tId = isAllowed(ALLOWED_TEMPLATES, meta.templateId)
                               ? meta.templateId
                               : 'template-1';
-                            const pId = isAllowed(ALLOWED_PALETTES, meta.paletteId)
-                              ? meta.paletteId
-                              : 'marino';
+                            const pId = normalizePalette(meta.paletteId);
                             return (
                               <CoverRenderer
                                 mode="template"
