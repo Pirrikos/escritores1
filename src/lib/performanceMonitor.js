@@ -4,7 +4,7 @@
  */
 
 import productionLogger, { LOG_CATEGORIES } from './productionLogger.js';
-import { securityLogger } from './securityLogger.js';
+import securityLogger from './securityLogger.js';
 
 // Performance thresholds (in milliseconds)
 export const PERFORMANCE_THRESHOLDS = {

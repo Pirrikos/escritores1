@@ -40,6 +40,7 @@ export default function LibraryPage() {
           synopsis,
           author_id,
           created_at,
+          cover_url,
           profiles!author_id (
             display_name
           )
@@ -166,19 +167,54 @@ export default function LibraryPage() {
                 >
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 p-4 w-64">
                     {/* Cover */}
-                    <div className="mb-4 flex justify-center">
-                      <div className="transform group-hover:scale-105 transition-transform duration-300">
-                        <CoverRenderer
-                          mode="auto"
-                          title={work.title}
-                          author={work.profiles?.display_name || 'Autor Desconocido'}
-                          paletteId="marino"
-                          width={180}
-                          height={270}
-                          className="shadow-md rounded-sm"
+              <div className="mb-4 flex justify-center">
+                <div className="transform group-hover:scale-105 transition-transform duration-300">
+                  {work.cover_url ? (
+                    work.cover_url.startsWith('preview:') ? (
+                      // Renderizar portada desde configuración de preview
+                      (() => {
+                        const parts = work.cover_url.split(':');
+                        const templateId = parts[1];
+                        const paletteId = parts[2];
+                        const encodedTitle = parts[3];
+                        const encodedAuthor = parts[4];
+                        
+                        return (
+                          <CoverRenderer
+                            mode="template"
+                            templateId={templateId as any}
+                            title={decodeURIComponent(encodedTitle || work.title)}
+                            author={decodeURIComponent(encodedAuthor || 'Autor')}
+                            paletteId={paletteId as any}
+                            width={180}
+                            height={270}
+                            className="shadow-md rounded-sm"
+                          />
+                        );
+                      })()
+                    ) : (
+                      // Portada personalizada subida
+                      <div className="w-[180px] h-[270px] bg-gray-200 rounded overflow-hidden shadow-md">
+                        <img 
+                          src={supabase.storage.from('works').getPublicUrl(work.cover_url).data.publicUrl} 
+                          alt={`Portada de ${work.title}`}
+                          className="w-full h-full object-cover"
                         />
                       </div>
-                    </div>
+                    )
+                  ) : (
+                    <CoverRenderer
+                      mode="auto"
+                      title={work.title}
+                      author={work.profiles?.display_name || 'Autor Desconocido'}
+                      paletteId="marino"
+                      width={180}
+                      height={270}
+                      className="shadow-md rounded-sm"
+                    />
+                  )}
+                </div>
+              </div>
 
                     {/* Work Info */}
                     <div className="text-center">

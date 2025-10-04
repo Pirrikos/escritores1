@@ -147,7 +147,7 @@ CREATE INDEX IF NOT EXISTS idx_profiles_display_name_search ON profiles USING gi
 
 -- Add partial indexes for better performance on filtered queries
 CREATE INDEX IF NOT EXISTS idx_posts_published_recent ON posts (published_at DESC) 
-    WHERE status = 'published' AND published_at > (now() - interval '30 days');
+    WHERE status = 'published';
 
 CREATE INDEX IF NOT EXISTS idx_posts_draft_by_author ON posts (author_id, updated_at DESC) 
     WHERE status = 'draft';
@@ -173,8 +173,8 @@ SELECT
     COUNT(*) as total_posts,
     COUNT(*) FILTER (WHERE status = 'published') as published_posts,
     COUNT(*) FILTER (WHERE status = 'draft') as draft_posts,
-    COUNT(*) FILTER (WHERE created_at > now() - interval '24 hours') as posts_last_24h,
-    MAX(created_at) as last_post_date
+    COUNT(*) FILTER (WHERE published_at > now() - interval '24 hours') as posts_last_24h,
+    MAX(published_at) as last_post_date
 FROM posts 
 GROUP BY author_id;
 
@@ -186,6 +186,14 @@ COMMENT ON TABLE profiles IS 'User profiles with enhanced validation constraints
 COMMENT ON TABLE works IS 'Literary works with title and content validation';
 COMMENT ON TABLE posts IS 'Posts/chapters with content validation and rate limiting';
 COMMENT ON VIEW post_statistics IS 'Aggregated statistics for user posts';
+
+-- Create migration log table if it doesn't exist
+CREATE TABLE IF NOT EXISTS public.migration_log (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    migration_name text UNIQUE NOT NULL,
+    applied_at timestamptz DEFAULT now() NOT NULL,
+    description text
+);
 
 -- Log the migration completion
 INSERT INTO public.migration_log (migration_name, applied_at) 

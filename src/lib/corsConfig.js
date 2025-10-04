@@ -3,7 +3,7 @@
  * Provides secure and restrictive CORS settings for production
  */
 
-import { securityLogger } from './securityLogger.js';
+import securityLogger from './securityLogger.js';
 
 // Environment-based allowed origins
 const getAllowedOrigins = () => {

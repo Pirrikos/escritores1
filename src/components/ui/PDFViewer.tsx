@@ -50,44 +50,30 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
   }), []);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    console.log('✅ PDF cargado exitosamente, páginas:', numPages);
-    console.log('✅ URL utilizada:', fileUrl);
     setNumPages(numPages);
     setLoading(false);
     setError(null);
   }, [fileUrl]);
 
   const onDocumentLoadError = useCallback((error: Error) => {
-    console.error('❌ Error cargando PDF:', error);
-    console.error('❌ Error message:', error.message);
-    console.error('❌ Error name:', error.name);
-    console.error('❌ Error stack:', error.stack);
-    console.error('❌ URL que falló:', fileUrl);
-    console.error('❌ Tipo de error:', typeof error);
-    console.error('❌ Error completo:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     setError(`Error al cargar el PDF: ${error.message || error}`);
     setLoading(false);
   }, [fileUrl]);
 
   // Cargar PDF como ArrayBuffer en lugar de usar URL directa
   useEffect(() => {
-    console.log('🔍 Iniciando PDFViewer con URL:', fileUrl);
-    
     // Evitar peticiones duplicadas para la misma URL
     if (lastUrlRef.current === fileUrl && pdfDataRef.current) {
-      console.log('🔄 PDF ya cargado en memoria, reutilizando ArrayBuffer');
       return;
     }
     
     // Evitar ejecución en paralelo
     if (loadingInProgressRef.current) {
-      console.log('🔄 Carga ya en progreso, evitando petición duplicada');
       return;
     }
     
     // Cancelar petición anterior si existe
     if (abortControllerRef.current) {
-      console.log('🛑 Cancelando petición anterior');
       abortControllerRef.current.abort();
     }
     
@@ -98,8 +84,6 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
     loadingInProgressRef.current = true;
     
     if (fileUrl) {
-      console.log('📥 Descargando PDF como ArrayBuffer...');
-      
       fetch(fileUrl, {
         method: 'GET',
         credentials: 'omit', // Sin credenciales para URLs de Supabase
@@ -110,24 +94,19 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
             if (!response.ok) {
               throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            console.log('✅ Respuesta exitosa, convirtiendo a ArrayBuffer...');
             return response.arrayBuffer();
           }
           return null;
         })
         .then(arrayBuffer => {
           if (!abortController.signal.aborted && arrayBuffer) {
-            console.log('✅ PDF cargado como ArrayBuffer:', arrayBuffer.byteLength, 'bytes');
             pdfDataRef.current = arrayBuffer;
             setLoading(false);
             setError(null);
           }
         })
         .catch(error => {
-          if (error.name === 'AbortError') {
-            console.log('🛑 Descarga cancelada (componente desmontado o nueva URL)');
-          } else {
-            console.error('❌ Error descargando PDF:', error);
+          if (error.name !== 'AbortError') {
             setError(`Error al descargar el PDF: ${error.message}`);
             setLoading(false);
           }
@@ -139,7 +118,6 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
     
     // Cleanup function para cancelar peticiones pendientes
     return () => {
-      console.log('🧹 PDFViewer - Limpiando peticiones pendientes');
       if (abortController && !abortController.signal.aborted) {
         abortController.abort();
       }

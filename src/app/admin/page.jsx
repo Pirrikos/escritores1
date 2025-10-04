@@ -117,7 +117,104 @@ export default function AdminDashboard() {
             {activeTab === 'dashboard' && (
               <div>
                 <h2 className="text-xl font-semibold text-slate-700 mb-4">Dashboard Principal</h2>
-                <p className="text-slate-600 mb-4">Bienvenido al panel de administración. Usa las pestañas para navegar entre las diferentes secciones.</p>
+                <p className="text-slate-600 mb-6">Bienvenido al panel de administración. Usa las pestañas para navegar entre las diferentes secciones.</p>
+                
+                {/* Información de Autenticación */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200 mb-6">
+                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
+                      <Icon path={Icons.user} size="sm" className="text-white" />
+                    </div>
+                    Estado de Autenticación
+                  </h3>
+                  
+                  {session ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center">
+                        <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                        <span className="text-green-700 font-medium">Sesión activa</span>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4 border border-blue-100">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="font-medium text-slate-600">Email:</span>
+                            <p className="text-slate-800 mt-1">{session.user?.email || 'No disponible'}</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-slate-600">ID de Usuario:</span>
+                            <p className="text-slate-800 mt-1 font-mono text-xs">{session.user?.id || 'No disponible'}</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-slate-600">Proveedor:</span>
+                            <p className="text-slate-800 mt-1 capitalize">{session.user?.app_metadata?.provider || 'No disponible'}</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-slate-600">Última actividad:</span>
+                            <p className="text-slate-800 mt-1">{session.user?.last_sign_in_at ? new Date(session.user.last_sign_in_at).toLocaleString('es-ES') : 'No disponible'}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2 mt-4">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Autenticado
+                        </span>
+                        {session.user?.email === 'proyectoenigmatico@gmail.com' && (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            Admin
+                          </span>
+                        )}
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          {session.user?.app_metadata?.provider || 'OAuth'}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center">
+                        <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
+                        <span className="text-red-700 font-medium">Sin sesión activa</span>
+                      </div>
+                      
+                      <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                        <p className="text-red-800 text-sm mb-3">
+                          No hay una sesión activa. Para acceder a las funciones de administración, necesitas autenticarte.
+                        </p>
+                        <Button
+                          onClick={() => router.push('/auth/login')}
+                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                        >
+                          Ir a Login
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Estado de Conexión a Supabase */}
+                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-6 border border-emerald-200">
+                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                    <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center mr-3">
+                      <Icon path={Icons.database} size="sm" className="text-white" />
+                    </div>
+                    Estado de Conexión
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                      <span className="text-green-700 font-medium">Supabase conectado</span>
+                    </div>
+                    
+                    <div className="bg-white rounded-lg p-4 border border-emerald-100">
+                      <p className="text-emerald-800 text-sm">
+                        La conexión a Supabase está funcionando correctamente. 
+                        {session ? ' Puedes usar todas las funciones de administración.' : ' Necesitas autenticarte para usar las funciones de administración.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

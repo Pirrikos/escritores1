@@ -3,26 +3,131 @@
 import Link from 'next/link';
 import { useEffect, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
-import CoverRenderer, { CoverMode, TemplateId, PaletteId } from '@/components/ui/CoverRenderer';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import PostsCarousel from '@/components/ui/PostsCarousel';
+import WorksCarousel from '@/components/ui/WorksCarousel';
+import ChaptersCarousel from '@/components/ui/ChaptersCarousel';
+
+// Interfaces para los tipos de datos
+interface Post {
+  id: string;
+  title: string;
+  content?: string;
+  author_id: string;
+  created_at: string;
+  published_at?: string;
+  display_name?: string;
+  profiles?: {
+    display_name: string;
+  };
+}
+
+interface Work {
+  id: string;
+  title: string;
+  synopsis?: string;
+  author_id: string;
+  created_at: string;
+  cover_url?: string;
+  profiles: {
+    display_name: string;
+  };
+}
+
+interface Chapter {
+  id: string;
+  title: string;
+  synopsis?: string;
+  author_id: string;
+  created_at: string;
+  cover_url?: string;
+  profiles: {
+    display_name: string;
+  };
+}
 
 function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = getSupabaseBrowserClient();
+  const supabase = createClientComponentClient();
 
-  // Estado para el generador de portadas
-  const [coverSettings, setCoverSettings] = useState<{
-    mode: CoverMode;
-    templateId: TemplateId;
-    paletteId: PaletteId;
-  }>({
-    mode: 'template',
-    templateId: 'template-1',
-    paletteId: 'marino'
-  });
-  const [bookTitle, setBookTitle] = useState('Mi Nueva Obra');
-  const [authorName, setAuthorName] = useState('Autor Ejemplo');
+  // Estados para los datos
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [works, setWorks] = useState<Work[]>([]);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Función para cargar posts desde la API
+  const loadPosts = async () => {
+    try {
+      const response = await fetch('/api/feed?limit=10&status=published');
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Posts response:', result); // Debug log
+        setPosts(result.data || []);
+      } else {
+        console.error('Error response:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Error cargando posts:', error);
+    }
+  };
+
+  // Función para cargar obras
+  const loadWorks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('works')
+        .select(`
+          id,
+          title,
+          synopsis,
+          author_id,
+          created_at,
+          cover_url,
+          profiles!works_author_id_fkey (
+            display_name
+          )
+        `)
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      setWorks(data || []);
+    } catch (error) {
+      console.error('Error cargando obras:', error);
+    }
+  };
+
+  // Función para cargar capítulos
+  const loadChapters = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chapters')
+        .select(`
+          id,
+          title,
+          author_id,
+          created_at,
+          is_independent,
+          slug,
+          cover_url,
+          profiles!chapters_author_id_fkey (
+            display_name
+          )
+        `)
+        .eq('status', 'published')
+        .eq('is_independent', true)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      setChapters(data || []);
+    } catch (error) {
+      console.error('Error cargando capítulos:', error);
+    }
+  };
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
@@ -74,6 +179,24 @@ function HomePageContent() {
           console.error('Error en callback de autenticación:', error);
           router.push('/auth/login?error=callback_error');
         }
+        return; // Salir temprano para evitar cargar datos durante OAuth
+      }
+    };
+
+    const loadData = async () => {
+      console.log('Iniciando carga de datos...');
+      setLoading(true);
+      try {
+        await Promise.all([
+          loadPosts(),
+          loadWorks(),
+          loadChapters()
+        ]);
+        console.log('Carga de datos completada');
+      } catch (error) {
+        console.error('Error en carga de datos:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -81,8 +204,12 @@ function HomePageContent() {
     const hasOAuthParams = window.location.search.includes('code') || window.location.hash.includes('code');
     if (hasOAuthParams) {
       handleOAuthCallback();
+    } else {
+      loadData();
     }
   }, [router, supabase]);
+
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -93,7 +220,7 @@ function HomePageContent() {
             Bienvenido a Escritores
           </h1>
           <p className="text-xl text-gray-700 mb-8 max-w-2xl mx-auto">
-            Una plataforma para escritores creativos donde puedes compartir tus historias, poemas y ensayos.
+            Descubre historias, obras completas y capítulos independientes de nuestros talentosos escritores.
           </p>
           
           <nav role="navigation" aria-label="Navegación principal">
@@ -110,122 +237,38 @@ function HomePageContent() {
           </nav>
         </header>
 
-        {/* Generador de Portadas */}
-        <section className="max-w-6xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Generador de Portadas
-              </h2>
-              <p className="text-gray-600 text-lg">
-                Crea portadas profesionales para tus obras de forma automática
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Configuración */}
-              <div className="space-y-6">
-                <div>
-                  <label htmlFor="book-title" className="block text-sm font-medium text-gray-700 mb-2">
-                    Título del libro
-                  </label>
-                  <input
-                    id="book-title"
-                    type="text"
-                    value={bookTitle}
-                    onChange={(e) => setBookTitle(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Ingresa el título de tu obra"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="author-name" className="block text-sm font-medium text-gray-700 mb-2">
-                    Nombre del autor
-                  </label>
-                  <input
-                    id="author-name"
-                    type="text"
-                    value={authorName}
-                    onChange={(e) => setAuthorName(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Ingresa tu nombre"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="template-select" className="block text-sm font-medium text-gray-700 mb-2">
-                    Plantilla de diseño
-                  </label>
-                  <select
-                    id="template-select"
-                    value={coverSettings.templateId}
-                    onChange={(e) => setCoverSettings(prev => ({ ...prev, templateId: e.target.value as TemplateId }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="template-1">Franja Diagonal</option>
-                    <option value="template-2">Marco Fino</option>
-                    <option value="template-3">Líneas Suaves</option>
-                    <option value="template-4">Círculos Decorativos</option>
-                    <option value="template-5">Gradiente Sutil</option>
-                    <option value="template-6">Formas Geométricas</option>
-                    <option value="template-7">Líneas Verticales</option>
-                    <option value="template-8">Marco Redondeado</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="palette-select" className="block text-sm font-medium text-gray-700 mb-2">
-                    Paleta de colores
-                  </label>
-                  <select
-                    id="palette-select"
-                    value={coverSettings.paletteId}
-                    onChange={(e) => setCoverSettings(prev => ({ ...prev, paletteId: e.target.value as PaletteId }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="marino">Marino Clásico</option>
-                    <option value="rojo">Rojo Profundo</option>
-                    <option value="negro">Negro Elegante</option>
-                    <option value="verde">Verde Esmeralda</option>
-                    <option value="purpura">Púrpura Editorial</option>
-                  </select>
-                </div>
-
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="font-medium text-gray-900 mb-2">¿Cómo funciona?</h3>
-                  <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• Ingresa el título y autor de tu obra</li>
-                    <li>• Selecciona una plantilla de diseño</li>
-                    <li>• Elige una paleta de colores</li>
-                    <li>• La portada se genera automáticamente</li>
-                    <li>• Puedes usar esta portada en el panel de administración</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Vista previa */}
-              <div className="flex flex-col items-center">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Vista previa</h3>
-                <div className="bg-gray-50 rounded-lg p-6 flex justify-center">
-                  <CoverRenderer
-                    mode={coverSettings.mode}
-                    templateId={coverSettings.templateId}
-                    title={bookTitle}
-                    author={authorName}
-                    paletteId={coverSettings.paletteId}
-                    width={250}
-                    height={375}
-                    className="shadow-2xl"
-                  />
-                </div>
-                <p className="text-sm text-gray-500 mt-4 text-center">
-                  Esta portada se actualizará automáticamente cuando cambies la configuración
-                </p>
-              </div>
-            </div>
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Cargando contenido...</p>
           </div>
-        </section>
+        ) : (
+          <div className="space-y-12">
+            {/* Posts Section */}
+            <PostsCarousel 
+              posts={posts}
+              title="Posts Recientes"
+              description="Últimas publicaciones de nuestros escritores"
+              className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+            />
+
+            {/* Works Section */}
+            <WorksCarousel 
+              works={works}
+              title="Obras Completas"
+              description="Libros y obras completas de nuestros autores"
+              className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+            />
+
+            {/* Chapters Section */}
+            <ChaptersCarousel 
+              chapters={chapters}
+              title="Capítulos Independientes"
+              description="Historias cortas y capítulos únicos"
+              className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+            />
+          </div>
+        )}
         
         <footer className="text-center mt-12 text-gray-600">
           <p className="text-lg">Explora, crea y comparte tu creatividad literaria</p>
@@ -238,13 +281,9 @@ function HomePageContent() {
 function LoadingFallback() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-      <div className="text-center" role="status" aria-live="polite">
-        <div 
-          className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"
-          aria-hidden="true"
-        ></div>
-        <p className="text-gray-600">Cargando aplicación...</p>
-        <span className="sr-only">La aplicación se está cargando, por favor espera</span>
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Cargando página principal...</p>
       </div>
     </div>
   );

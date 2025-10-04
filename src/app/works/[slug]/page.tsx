@@ -183,13 +183,44 @@ function WorkDetailPageContent({
               {/* Cover */}
               <div className="lg:col-span-1">
                 <div className="aspect-[3/4] w-full max-w-sm mx-auto">
-                  <CoverRenderer
-                    mode="auto"
-                    title={work.title}
-                    author={work.profiles.display_name}
-                    paletteId="marino"
-                    className="w-full h-full rounded-lg shadow-lg"
-                  />
+                  {work.cover_url ? (
+                    work.cover_url.startsWith('preview:') ? (
+                      (() => {
+                        const parts = work.cover_url.split(':');
+                        const templateId = parts[1];
+                        const paletteId = parts[2];
+                        const encodedTitle = parts[3];
+                        const encodedAuthor = parts[4];
+                        
+                        return (
+                          <CoverRenderer
+                            templateId={templateId as any}
+                            title={decodeURIComponent(encodedTitle || work.title)}
+                            author={decodeURIComponent(encodedAuthor || work.profiles.display_name)}
+                            paletteId={paletteId as any}
+                            className="w-full h-full rounded-lg shadow-lg"
+                          />
+                        );
+                      })()
+                    ) : (
+                      // Portada personalizada subida
+                      <div className="w-full h-full bg-gray-200 rounded-lg overflow-hidden shadow-lg">
+                        <img 
+                          src={work.cover_url} 
+                          alt={`Portada de ${work.title}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )
+                  ) : (
+                    <CoverRenderer
+                      mode="auto"
+                      title={work.title}
+                      author={work.profiles.display_name}
+                      paletteId="marino"
+                      className="w-full h-full rounded-lg shadow-lg"
+                    />
+                  )}
                 </div>
               </div>
 

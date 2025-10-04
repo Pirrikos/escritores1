@@ -123,6 +123,6 @@ GROUP BY author_id;
 GRANT SELECT ON public.chapter_statistics TO authenticated;
 
 -- Log migration completion
-INSERT INTO public.migration_log (migration_name, completed_at) 
+INSERT INTO public.migration_log (migration_name, applied_at) 
 VALUES ('20250127000000_create_chapters_table', now())
 ON CONFLICT (migration_name) DO NOTHING;

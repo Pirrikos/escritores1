@@ -62,7 +62,7 @@ BEGIN
 END $$;
 
 -- Add a record to the migration log
-INSERT INTO migration_log (migration_name, executed_at, description)
+INSERT INTO migration_log (migration_name, applied_at, description)
 VALUES (
     '20250127000001_migrate_chapters_data',
     NOW(),

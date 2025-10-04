@@ -3,7 +3,7 @@
  * Advanced logging with multiple levels, structured data, and production-ready features
  */
 
-import { securityLogger } from './securityLogger.js';
+import securityLogger from './securityLogger.js';
 
 // Log levels
 export const LOG_LEVELS = {

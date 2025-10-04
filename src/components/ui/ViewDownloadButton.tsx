@@ -83,7 +83,6 @@ export function ViewDownloadButton({
       
       // Verificar si filePath es una URL externa
       if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-        console.log('✅ ViewDownloadButton useEffect - URL externa detectada:', filePath);
         setActualFileUrl(filePath);
         setFileExists(true);
         return;
@@ -91,24 +90,19 @@ export function ViewDownloadButton({
 
       // Solo generar URL firmada para rutas de bucket si filePath no está vacío
       if (!filePath || filePath.trim() === '' || filePath === 'NULL' || filePath === 'null') {
-        console.log('⚠️ ViewDownloadButton useEffect - filePath vacío, null o inválido:', filePath);
         setFileExists(false);
         return;
       }
 
-      console.log('🔑 ViewDownloadButton useEffect - Generando URL firmada para:', filePath);
       setIsLoading(true);
       try {
         const signedUrl = await getSignedFileUrl(filePath, 3600, bucket);
-        console.log('✅ ViewDownloadButton useEffect - URL firmada generada');
         setActualFileUrl(signedUrl);
         setFileExists(true);
       } catch (error) {
-        console.error('❌ ViewDownloadButton useEffect - Error generando URL firmada para filePath:', filePath, error);
         // Asumir que el archivo existe y manejar errores en tiempo de ejecución
         // Esto evita mostrar "Archivo no disponible" cuando el archivo sí existe
         setFileExists(true);
-        console.log('⚠️ ViewDownloadButton useEffect - Asumiendo que el archivo existe, se manejará en tiempo de ejecución');
       } finally {
         setIsLoading(false);
       }
@@ -168,9 +162,6 @@ export function ViewDownloadButton({
 
   // Manejar vista previa
   const handleView = async () => {
-    console.log('🚀 HANDLEVIEW INICIADO');
-    alert('🚀 HANDLEVIEW INICIADO - Tipo: ' + detectedFileType + ' - CanView: ' + canView);
-    
     if (onView) {
       onView();
       return;
@@ -181,23 +172,17 @@ export function ViewDownloadButton({
     
     // Si no tenemos URL actual, intentar generar una
     if (!urlToUse && filePath) {
-      console.log('🔍 ViewDownloadButton handleView - filePath:', filePath);
-      
       // Verificar si filePath es una URL externa
       if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-        console.log('✅ ViewDownloadButton handleView - URL externa detectada:', filePath);
         urlToUse = filePath;
         setActualFileUrl(filePath);
       } else {
         // Solo generar URL firmada para rutas de bucket
-        console.log('🔑 ViewDownloadButton handleView - Generando URL firmada para:', filePath);
         try {
           setIsLoading(true);
           urlToUse = await getSignedFileUrl(filePath, 3600, bucket);
-          console.log('✅ ViewDownloadButton handleView - URL firmada generada');
           setActualFileUrl(urlToUse);
         } catch (error) {
-          console.error('❌ ViewDownloadButton handleView - Error con filePath:', filePath, error);
           addToast({
             type: 'error',
             message: 'Error al acceder al archivo'
@@ -211,7 +196,6 @@ export function ViewDownloadButton({
 
     // Si aún no tenemos URL, intentar usar filePath directamente para vista previa
     if (!urlToUse && filePath) {
-      console.log('⚠️ ViewDownloadButton handleView - Usando filePath directamente para vista previa:', filePath);
       urlToUse = filePath;
     }
 
@@ -225,8 +209,6 @@ export function ViewDownloadButton({
 
     // Si el archivo no se puede ver en navegador, solo descargar
     if (!canView) {
-      console.log('❌ ViewDownloadButton handleView - Archivo no se puede ver en navegador, descargando:', detectedFileType);
-      alert('❌ NO SE PUEDE VER - Tipo: ' + detectedFileType + ' - CanView: ' + canView);
       addToast({
         type: 'info',
         message: `Los archivos ${getFileTypeDescription(detectedFileType)} solo se pueden descargar`
@@ -234,23 +216,16 @@ export function ViewDownloadButton({
       handleDownload();
       return;
     }
-
-    console.log('✅ ViewDownloadButton handleView - Archivo se puede ver, tipo:', detectedFileType);
-    alert('✅ SE PUEDE VER - Tipo: ' + detectedFileType + ' - Abriendo vista previa');
     
     if (detectedFileType === 'pdf') {
-      console.log('📄 ViewDownloadButton handleView - Abriendo PDF en visor integrado');
-      console.log('📄 ViewDownloadButton handleView - URL para PDF:', urlToUse);
       // Asegurar que tenemos la URL antes de abrir el visor
       if (!actualFileUrl && urlToUse) {
         setActualFileUrl(urlToUse);
       }
       setIsPDFViewerOpen(true);
     } else if (detectedFileType === 'image' || detectedFileType === 'text') {
-      console.log('🔍 ViewDownloadButton handleView - Abriendo vista previa para tipo:', detectedFileType);
       setIsPreviewOpen(true);
     } else {
-      console.log('🔗 ViewDownloadButton handleView - Abriendo en nueva pestaña para tipo:', detectedFileType);
       // Para otros tipos de archivo, abrir en nueva pestaña
       window.open(urlToUse, '_blank');
     }
@@ -266,27 +241,21 @@ export function ViewDownloadButton({
     // Si no tenemos URL actual, intentar generar una
     let urlToUse = actualFileUrl;
     if (!urlToUse && filePath) {
-      console.log('🔍 ViewDownloadButton handleDownload - filePath:', filePath);
-      
       // Verificar si filePath es una URL externa
       if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-        console.log('✅ ViewDownloadButton handleDownload - URL externa detectada:', filePath);
         urlToUse = filePath;
         setActualFileUrl(filePath);
       } else {
         // Solo generar URL firmada para rutas de bucket
-        console.log('🔑 ViewDownloadButton handleDownload - Generando URL firmada para:', filePath);
         try {
           setIsLoading(true);
           
           // Intentar generar URL firmada directamente sin verificación previa
           try {
             urlToUse = await getSignedFileUrl(filePath);
-            console.log('✅ ViewDownloadButton handleDownload - URL firmada generada');
             setActualFileUrl(urlToUse);
             setFileExists(true); // Asumir que existe si se pudo generar la URL
           } catch (urlError) {
-            console.error('❌ ViewDownloadButton handleDownload - Error generando URL firmada:', urlError);
             setFileExists(false);
             addToast({
               type: 'warning',
@@ -295,7 +264,6 @@ export function ViewDownloadButton({
             return;
           }
         } catch (error) {
-          console.error('❌ ViewDownloadButton handleDownload - Error con filePath:', filePath, error);
           addToast({
             type: 'error',
             message: 'Error al acceder al archivo'
@@ -337,7 +305,6 @@ export function ViewDownloadButton({
         message: `Archivo "${getFileName()}" descargado exitosamente`
       });
     } catch (error) {
-      console.error('Error downloading file:', error);
       addToast({
         type: 'error',
         message: 'Error al descargar el archivo'
@@ -573,7 +540,7 @@ export function ViewDownloadButton({
               {detectedFileType !== 'text' && (
                 <Button
                   variant="outline"
-                  onClick={() => window.open(actualFileUrl, '_blank')}
+                  onClick={() => actualFileUrl && window.open(actualFileUrl, '_blank')}
                   className="flex items-center gap-2"
                 >
                   <Icon path={Icons.external} size="sm" />

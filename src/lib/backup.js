@@ -3,7 +3,7 @@
  * Proporciona funcionalidades para crear backups automáticos y recuperar datos
  */
 
-import { createServerSupabaseClient } from './supabaseServer';
+import getSupabaseAdmin from './supabaseAdmin';
 import { logCriticalError, CRITICAL_ERROR_TYPES, SEVERITY_LEVELS } from './monitoring';
 
 // Configuración de backup
@@ -88,7 +88,7 @@ export async function createBackup(tableName, options = {}) {
   console.log(`📦 Iniciando backup de ${tableName}...`);
   
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = getSupabaseAdmin();
     
     // Verificar si es necesario hacer backup
     const lastBackup = lastBackupTimes.get(tableName);
@@ -231,7 +231,7 @@ export async function restoreFromBackup(tableName, backupTimestamp, options = {}
     }
     
     // Realizar restauración
-    const supabase = await createServerSupabaseClient();
+    const supabase = getSupabaseAdmin();
     
     // Opcionalmente limpiar tabla existente
     if (options.clearExisting) {

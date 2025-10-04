@@ -33,28 +33,45 @@ function UploadChaptersContent() {
 
   // Estados para cargar obras disponibles
   const [availableWorks, setAvailableWorks] = useState([]);
+  
+  // Estado para el perfil del usuario
+  const [userProfile, setUserProfile] = useState(null);
 
-  // Cargar obras disponibles para capítulos
+  // Cargar obras disponibles para capítulos y perfil del usuario
   useEffect(() => {
-    const loadWorks = async () => {
+    const loadWorksAndProfile = async () => {
       if (!session?.user?.id) return;
 
       try {
-        const { data, error } = await supabase
+        // Cargar obras
+        const { data: worksData, error: worksError } = await supabase
           .from('works')
           .select('id, title, slug')
           .eq('author_id', session.user.id)
           .order('created_at', { ascending: false });
 
-        if (error) throw error;
-        setAvailableWorks(data || []);
+        if (worksError) throw worksError;
+        setAvailableWorks(worksData || []);
+
+        // Cargar perfil del usuario
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profileError) {
+          console.error('Error obteniendo perfil:', profileError);
+        } else {
+          setUserProfile(profileData);
+        }
       } catch (error) {
-        console.error('Error al cargar obras:', error);
-        addToast({ message: 'Error al cargar las obras disponibles', type: 'error' });
+        console.error('Error al cargar datos:', error);
+        addToast({ message: 'Error al cargar los datos disponibles', type: 'error' });
       }
     };
 
-    loadWorks();
+    loadWorksAndProfile();
   }, [session, supabase, addToast]);
 
   // Estados del formulario para capítulos
@@ -199,7 +216,7 @@ function UploadChaptersContent() {
       let coverUrl = null;
       let chapterUrl = null;
 
-      // Subir portada si existe
+      // Subir portada si existe, o generar una automática
       if (chapterFiles.cover) {
         const coverExtension = chapterFiles.cover.name.split('.').pop() || 'jpg';
         const coverPath = `${session.user.id}/cover-${slug}-${Date.now()}.${coverExtension}`;
@@ -209,6 +226,11 @@ function UploadChaptersContent() {
 
         if (coverError) throw coverError;
         coverUrl = coverPath;
+      } else {
+        const authorName = userProfile?.display_name || session?.user?.user_metadata?.display_name || 'Autor';
+
+        // Usar la portada del preview con la configuración seleccionada
+        coverUrl = `preview:${coverSettings.templateId}:${coverSettings.paletteId}:${encodeURIComponent(sanitizedData.title)}:${encodeURIComponent(authorName)}`;
       }
 
       // Subir archivo del capítulo
@@ -233,7 +255,6 @@ function UploadChaptersContent() {
         chapter_number: sanitizedData.chapter_number,
         status: sanitizedData.status,
         author_id: session.user.id,
-        user_id: session.user.id, // Agregar user_id requerido
         slug: slug,
         cover_url: coverUrl,
         file_url: chapterUrl,
@@ -452,7 +473,7 @@ function UploadChaptersContent() {
                           mode="template"
                           templateId={coverSettings.templateId}
                           title={chapterFormData.title || 'Título del capítulo'}
-                          author={session?.user?.user_metadata?.display_name || 'Autor'}
+                          author={userProfile?.display_name || session?.user?.user_metadata?.display_name || 'Autor'}
                           paletteId={coverSettings.paletteId}
                           width={200}
                           height={300}

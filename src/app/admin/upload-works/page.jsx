@@ -203,6 +203,19 @@ function UploadWorksContent() {
     setLoading(true);
 
     try {
+      // Obtener el perfil del usuario para el display_name
+      const { data: userProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Error obteniendo perfil:', profileError);
+      }
+
+      const authorName = userProfile?.display_name || session?.user?.user_metadata?.display_name || 'Autor';
+
       // Sanitizar datos
       const sanitizedData = {
         title: sanitizeText(workFormData.title),
@@ -229,7 +242,7 @@ function UploadWorksContent() {
       let coverUrl = null;
       let workUrl = null;
 
-      // Subir portada si existe
+      // Subir portada si existe, o generar una automática
       if (workFiles.cover) {
         const coverPath = `${session.user.id}/cover-${slug}-${Date.now()}.${workFiles.cover.name.split('.').pop()}`;
         const { data: coverData, error: coverError } = await supabase.storage
@@ -240,6 +253,9 @@ function UploadWorksContent() {
 
         // Para buckets privados, guardamos el path del archivo
         coverUrl = coverPath;
+      } else {
+        // Usar la portada del preview con la configuración seleccionada
+        coverUrl = `preview:${coverSettings.templateId}:${coverSettings.paletteId}:${encodeURIComponent(sanitizedData.title)}:${encodeURIComponent(authorName)}`;
       }
 
       // Subir archivo de la obra

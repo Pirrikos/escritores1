@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import CoverRenderer from '@/components/ui/CoverRenderer';
+import { parsePreviewCover } from '@/lib/utils';
 import { Icon, Icons } from '@/components/ui/Icon';
 import { generateSlug } from '@/lib/slugUtils';
 
@@ -15,6 +16,7 @@ interface Chapter {
   status: string;
   is_independent: boolean;
   slug?: string;
+  cover_url?: string;
   profiles: {
     display_name: string;
   };
@@ -44,6 +46,7 @@ export default function ChaptersPage() {
           status,
           is_independent,
           slug,
+          cover_url,
           profiles!author_id (
             display_name
           )
@@ -182,13 +185,51 @@ export default function ChaptersPage() {
                 >
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden w-64">
                     <div className="p-6">
-                      <CoverRenderer
-                        title={chapter.title}
-                        author={chapter.profiles?.display_name || 'Autor Desconocido'}
-                        width={200}
-                        height={280}
-                        className="mx-auto mb-4 rounded-lg shadow-sm"
-                      />
+                      <div className="transform group-hover:scale-105 transition-transform duration-300">
+                        {(() => {
+                          const meta = parsePreviewCover(
+                            chapter.cover_url,
+                            chapter.title,
+                            chapter.profiles?.display_name || 'Autor Desconocido'
+                          );
+                          if (meta.mode === 'template') {
+                            return (
+                              <CoverRenderer
+                                mode="template"
+                                templateId={meta.templateId as any}
+                                title={meta.title}
+                                author={meta.author}
+                                paletteId={meta.paletteId as any}
+                                width={200}
+                                height={280}
+                                className="mx-auto mb-4 rounded-lg shadow-sm"
+                              />
+                            );
+                          }
+                          if (meta.mode === 'image') {
+                            return (
+                              <div className="w-[200px] h-[280px] bg-gray-200 rounded overflow-hidden shadow-sm mx-auto mb-4">
+                                <img
+                                  src={meta.url}
+                                  alt={`Portada de ${chapter.title}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            );
+                          }
+                          return (
+                            <CoverRenderer
+                              mode="auto"
+                              title={chapter.title}
+                              author={chapter.profiles?.display_name || 'Autor Desconocido'}
+                              paletteId="marino"
+                              width={200}
+                              height={280}
+                              className="mx-auto mb-4 rounded-lg shadow-sm"
+                            />
+                          );
+                        })()}
+                      </div>
                       
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {chapter.title}

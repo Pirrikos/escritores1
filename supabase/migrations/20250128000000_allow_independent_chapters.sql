@@ -89,8 +89,9 @@ WHERE is_independent = true;
 GRANT SELECT ON public.independent_chapters TO authenticated;
 
 -- Update the chapter statistics view to include independent chapters
-CREATE OR REPLACE VIEW public.chapter_statistics AS
-SELECT 
+DROP VIEW IF EXISTS public.chapter_statistics;
+CREATE VIEW public.chapter_statistics AS
+SELECT
     author_id,
     COUNT(*) as total_chapters,
     COUNT(*) FILTER (WHERE status = 'published') as published_chapters,

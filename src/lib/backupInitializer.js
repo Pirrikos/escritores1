@@ -4,6 +4,7 @@
  */
 
 import { initializeBackupSystem, stopBackupSystem } from './backup';
+import { getValidatedEnv, assertBackupEnv } from './env';
 import { logCriticalError, CRITICAL_ERROR_TYPES, SEVERITY_LEVELS } from './monitoring';
 
 // Estado del sistema de backup
@@ -51,21 +52,18 @@ async function performBackupInitialization() {
       return { success: false, reason: 'client_environment' };
     }
 
-    // Verificar variables de entorno necesarias
-    const requiredEnvVars = ['NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
-    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-    
-    if (missingVars.length > 0) {
-      const error = `Variables de entorno faltantes: ${missingVars.join(', ')}`;
-      console.error('❌', error);
-      
+    // Validar variables de entorno con Zod
+    try {
+      getValidatedEnv();
+      assertBackupEnv();
+    } catch (envError) {
+      console.error('❌ Error de entorno:', envError.message);
       await logCriticalError(CRITICAL_ERROR_TYPES.SYSTEM_FAILURE, {
         message: 'Fallo en inicialización de backup por variables de entorno',
-        missingVars,
+        error: envError.message,
         component: 'backup_initializer'
       }, SEVERITY_LEVELS.HIGH);
-      
-      return { success: false, reason: 'missing_env_vars', missingVars };
+      return { success: false, reason: 'missing_or_invalid_env', error: envError.message };
     }
 
     // Inicializar el sistema de backup
