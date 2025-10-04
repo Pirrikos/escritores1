@@ -14,6 +14,7 @@ interface Post {
   display_name?: string;
   profiles?: {
     display_name: string;
+    avatar_url?: string;
   };
 }
 
@@ -63,7 +64,20 @@ export default function PostsCarousel({
   };
 
   const getAuthorName = (post: Post) => {
-    return post.display_name || post.profiles?.display_name || 'Autor Desconocido';
+    const raw = post.display_name || post.profiles?.display_name || 'Autor Desconocido';
+    // Si parece un email, quedarnos con lo previo a '@'
+    const base = raw.includes('@') ? raw.split('@')[0] : raw;
+    // Quitar separadores comunes y normalizar espacios
+    const cleaned = base
+      .replace(/[._-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    // Capitalizar palabras (simple)
+    const pretty = cleaned
+      .split(' ')
+      .map(w => (w ? w.charAt(0).toUpperCase() + w.slice(1) : ''))
+      .join(' ');
+    return pretty || 'Autor Desconocido';
   };
 
   const getPostDate = (post: Post) => {
@@ -137,30 +151,46 @@ export default function PostsCarousel({
               )}
 
               {/* Post Meta */}
-              <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs font-semibold">
-                      {getAuthorName(post).charAt(0).toUpperCase()}
-                    </span>
+              <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
+                {/* Izquierda: columna de avatar + corazón, y a la derecha el nombre (sin saltos) */}
+                <div className="flex items-start space-x-3 min-w-0">
+                  <div className="flex flex-col items-center gap-2">
+                    {post.profiles?.avatar_url ? (
+                      <img
+                        src={post.profiles.avatar_url.includes('googleusercontent.com')
+                          ? `/api/avatar?u=${encodeURIComponent(post.profiles.avatar_url)}`
+                          : post.profiles.avatar_url}
+                        alt={getAuthorName(post)}
+                        className="w-8 h-8 rounded-full object-cover"
+                        onError={(e) => {
+                          // Fallback: mostrar inicial si la imagen falla
+                          const el = e.currentTarget as HTMLImageElement;
+                          el.style.display = 'none';
+                          const next = el.nextElementSibling as HTMLElement | null;
+                          if (next) next.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      style={{ display: post.profiles?.avatar_url ? 'none' as const : 'flex' as const }}
+                      className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full items-center justify-center"
+                    >
+                      <span className="text-white text-xs font-semibold">
+                        {getAuthorName(post).charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    {/* Corazón debajo del avatar */}
+                    <LikeButton 
+                      targetType="post"
+                      targetId={post.id}
+                      className="text-sm"
+                    />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  <div className="flex-1 min-w-0 pr-2">
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
                       {getAuthorName(post)}
                     </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-3">
-                  {/* Like Button */}
-                  <LikeButton 
-                    targetType="post"
-                    targetId={post.id}
-                    className="text-sm"
-                  />
-                  
-                  <div className="text-right">
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                       {formatDate(getPostDate(post))}
                     </p>
                   </div>

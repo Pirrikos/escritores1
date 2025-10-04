@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { isAdminUser } from '@/lib/adminAuth';
@@ -11,6 +12,7 @@ interface AppHeaderProps {
 
 export default function AppHeader({ className = '' }: AppHeaderProps) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string>('');
@@ -30,6 +32,16 @@ export default function AppHeader({ className = '' }: AppHeaderProps) {
       setDisplayName(name);
       setHasSession(!!data.session);
       try { setIsAdmin(!!data.session && isAdminUser(data.session)); } catch {}
+      // Sincronizar perfil para corregir alias basados en email
+      if (data.session) {
+        try {
+          fetch('/api/system/sync-profile', { method: 'POST' })
+            .then(() => {
+              try { router.refresh(); } catch {}
+            })
+            .catch(() => {});
+        } catch {}
+      }
     });
 
     // Suscribirse a cambios de sesión
@@ -41,6 +53,16 @@ export default function AppHeader({ className = '' }: AppHeaderProps) {
       setDisplayName(name);
       setHasSession(!!session);
       try { setIsAdmin(!!session && isAdminUser(session)); } catch {}
+      // Reintentar sincronización en cambios de sesión
+      if (session) {
+        try {
+          fetch('/api/system/sync-profile', { method: 'POST' })
+            .then(() => {
+              try { router.refresh(); } catch {}
+            })
+            .catch(() => {});
+        } catch {}
+      }
     });
 
     // Cerrar al hacer click fuera

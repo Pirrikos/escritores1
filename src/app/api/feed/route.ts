@@ -12,21 +12,7 @@ export async function GET(req: Request) {
     const statusParam = searchParams.get('status') || 'published';
     const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 10, 1), 50) : 10;
 
-    // Desarrollo: devolver stub claro y controlado
-    if (process.env.NODE_ENV === 'development') {
-      const now = new Date().toISOString();
-      const data = Array.from({ length: limit }).map((_, i) => ({
-        id: `dev-post-${i + 1}`,
-        title: `Post de desarrollo #${i + 1}`,
-        content: 'Contenido de ejemplo para desarrollo. Ajusta en el backend real.',
-        author_id: `dev-author-${(i % 3) + 1}`,
-        created_at: now,
-        published_at: now,
-        profiles: { display_name: `Autor Dev ${(i % 3) + 1}` },
-        status: statusParam,
-      }));
-      return NextResponse.json({ data }, { status: 200 });
-    }
+    // En todos los entornos, consultar Supabase para obtener datos reales
 
     // Producción: delegar al backend real (Supabase). Si falla, devolver vacío.
     try {
@@ -41,7 +27,8 @@ export async function GET(req: Request) {
           created_at,
           published_at,
           profiles!posts_author_id_fkey (
-            display_name
+            display_name,
+            avatar_url
           )
         `)
         .eq('status', statusParam)

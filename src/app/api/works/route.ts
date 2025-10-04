@@ -17,7 +17,10 @@ export async function GET(req: Request) {
         author_id: `dev-author-${(i % 3) + 1}`,
         created_at: now,
         cover_url: `preview:template-1:marino:${encodeURIComponent(`Obra #${i + 1}`)}:${encodeURIComponent(`Autor ${(i % 3) + 1}`)}`,
-        profiles: { display_name: `Autor Dev ${(i % 3) + 1}` },
+        profiles: {
+          display_name: `Autor Dev ${(i % 3) + 1}`,
+          avatar_url: 'https://lh3.googleusercontent.com/a-/AOh14GiDevAvatar'
+        },
         status: statusParam,
       }));
       return NextResponse.json({ data }, { status: 200 });
@@ -35,7 +38,8 @@ export async function GET(req: Request) {
           created_at,
           cover_url,
           profiles!works_author_id_fkey (
-            display_name
+            display_name,
+            avatar_url
           )
         `)
         .eq('status', statusParam)
