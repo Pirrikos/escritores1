@@ -7,8 +7,8 @@ import { NextResponse } from 'next/server';
 import { 
   createVersionedResponse, 
   API_VERSIONS 
-} from '../../../../lib/apiVersioning.js';
-import { errorHandler } from '../../../../lib/errorHandler.js';
+} from '@/lib/apiVersioning.js';
+import { errorHandler } from '@/lib/errorHandler.js';
 
 // This endpoint supports v1 only
 const SUPPORTED_VERSIONS = [API_VERSIONS.V1];

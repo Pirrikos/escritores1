@@ -1,4 +1,4 @@
-import { getSupabaseRouteClient } from '@/lib/supabaseServer';
+import { getSupabaseRouteClient } from '@/lib/supabaseServer.js';
 import { NextResponse } from 'next/server';
 
 // GET /api/likes - Obtener información de likes

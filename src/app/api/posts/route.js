@@ -2,11 +2,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getSupabaseRouteClient } from "../../../lib/supabaseServer";
-import { sanitizePostData, normalizeText } from "../../../lib/sanitization";
-import { validateObject, postValidationSchema } from "../../../lib/validation";
-import { validatePost, checkPostRateLimit } from "../../../lib/databaseValidation";
-import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from "../../../lib/securityLogger";
+import { getSupabaseRouteClient } from "@/lib/supabaseServer.js";
+import { sanitizePostData, normalizeText } from "@/lib/sanitization.js";
+import { validateObject, postValidationSchema } from "@/lib/validation.js";
+import { validatePost, checkPostRateLimit } from "@/lib/databaseValidation.js";
+import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from "@/lib/securityLogger.js";
 import { 
   withErrorHandling, 
   handleAuthError, 
@@ -15,10 +15,10 @@ import {
   handleRateLimitError,
   createErrorResponse,
   ERROR_CODES 
-} from "../../../lib/errorHandler";
-import { withRateLimit, createIPRateLimiter } from "../../../lib/rateLimiter";
-import productionLogger, { LOG_CATEGORIES } from "../../../lib/productionLogger";
-import { monitorDatabaseOperation } from "../../../lib/performanceMonitor";
+} from "@/lib/errorHandler.js";
+import { withRateLimit, createIPRateLimiter } from "@/lib/rateLimiter.js";
+import productionLogger, { LOG_CATEGORIES } from "@/lib/productionLogger.js";
+import { monitorDatabaseOperation } from "@/lib/performanceMonitor.js";
 
 // Función de validación de datos del post mejorada
 function validatePostData(body, userId) {
@@ -79,7 +79,7 @@ const ipRateLimiter = createIPRateLimiter({
 export async function POST(req) {
   return withErrorHandling(async (request) => {
     // Iniciar monitoreo de rendimiento
-    const performanceTimer = new (await import('../../../lib/performanceMonitor.js')).PerformanceTimer('api_post_creation', {
+  const performanceTimer = new (await import('@/lib/performanceMonitor.js')).PerformanceTimer('api_post_creation', {
       method: 'POST',
       endpoint: '/api/posts',
       userAgent: request.headers.get('user-agent')

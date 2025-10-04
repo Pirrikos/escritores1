@@ -2,16 +2,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getSupabaseRouteClient } from "../../../lib/supabaseServer.js";
-import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from "../../../lib/securityLogger.js";
-import { ensureAdmin } from '../../../lib/adminAuth.server.js';
+import { getSupabaseRouteClient } from "@/lib/supabaseServer.js";
+import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from "@/lib/securityLogger.js";
+import { ensureAdmin } from '@/lib/adminAuth.server.js';
 import { 
   withErrorHandling, 
   handleAuthError, 
   handleDatabaseError,
   createErrorResponse,
   ERROR_CODES 
-} from "../../../lib/errorHandler.js";
+} from "@/lib/errorHandler.js";
 
 export async function GET(request) {
   return withErrorHandling(async (req) => {

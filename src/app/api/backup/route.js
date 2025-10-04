@@ -7,21 +7,21 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { ensureAdmin } from '../../../lib/adminAuth.server';
+import { ensureAdmin } from '@/lib/adminAuth.server.js';
 import { 
   createBackup, 
   restoreFromBackup, 
   listBackups, 
   getBackupStatistics 
-} from '../../../lib/backup';
+} from '@/lib/backup.js';
 import { 
   withErrorHandling, 
   createErrorResponse, 
   handleAuthError,
   ERROR_CODES 
-} from '../../../lib/errorHandler';
-import productionLogger, { LOG_CATEGORIES } from '../../../lib/productionLogger';
-import { PerformanceTimer } from '../../../lib/performanceMonitor';
+} from '@/lib/errorHandler.js';
+import productionLogger, { LOG_CATEGORIES } from '@/lib/productionLogger.js';
+import { PerformanceTimer } from '@/lib/performanceMonitor.js';
 
 // Tablas permitidas para backup
 const ALLOWED_TABLES = ['posts', 'profiles', 'follows', 'works'];

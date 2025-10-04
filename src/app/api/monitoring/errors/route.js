@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler';
-import { getErrorStatistics } from '@/lib/monitoring';
-import { ensureAdmin } from '@/lib/adminAuth.server';
+import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler.js';
+import { getErrorStatistics } from '@/lib/monitoring.js';
+import { ensureAdmin } from '@/lib/adminAuth.server.js';
 
 async function GET(request) {
   try {

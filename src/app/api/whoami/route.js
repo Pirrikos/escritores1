@@ -2,16 +2,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from "../../../lib/securityLogger.js";
+import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from "@/lib/securityLogger.js";
 import { 
   withErrorHandling, 
   handleAuthError, 
   createErrorResponse,
   ERROR_CODES 
-} from "../../../lib/errorHandler.js";
-import productionLogger, { LOG_CATEGORIES } from "../../../lib/productionLogger.js";
-import { PerformanceTimer } from "../../../lib/performanceMonitor.js";
-import { ensureAdmin } from "../../../lib/adminAuth.server.js";
+} from "@/lib/errorHandler.js";
+import productionLogger, { LOG_CATEGORIES } from "@/lib/productionLogger.js";
+import { PerformanceTimer } from "@/lib/performanceMonitor.js";
+import { ensureAdmin } from "@/lib/adminAuth.server.js";
 
 export async function GET(request) {
   return withErrorHandling(async (req) => {

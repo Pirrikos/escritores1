@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabaseServer';
-import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler';
-import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from '@/lib/securityLogger';
-import { withRateLimit } from '@/lib/rateLimiter';
+import { createServerSupabaseClient } from '@/lib/supabaseServer.js';
+import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler.js';
+import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from '@/lib/securityLogger.js';
+import { withRateLimit } from '@/lib/rateLimiter.js';
 
 async function POST(request) {
   try {

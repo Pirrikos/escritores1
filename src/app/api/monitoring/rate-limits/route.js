@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler';
-import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from '@/lib/securityLogger';
-import { getRateLimitStats, withRateLimit } from '@/lib/rateLimiter';
-import { ensureAdmin } from '@/lib/adminAuth.server';
+import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler.js';
+import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from '@/lib/securityLogger.js';
+import { getRateLimitStats, withRateLimit } from '@/lib/rateLimiter.js';
+import { ensureAdmin } from '@/lib/adminAuth.server.js';
 
 async function GET(request) {
   try {

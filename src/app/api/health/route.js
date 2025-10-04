@@ -2,13 +2,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getSupabaseRouteClient } from "../../../lib/supabaseServer";
+import { getSupabaseRouteClient } from "@/lib/supabaseServer.js";
 import { 
   withErrorHandling
-} from "../../../lib/errorHandler";
-import securityLogger from "../../../lib/securityLogger";
-import { performHealthCheck, quickHealthCheck, readinessCheck, HEALTH_STATUS } from '../../../lib/healthCheck.js';
-import productionLogger, { LOG_CATEGORIES } from '../../../lib/productionLogger.js';
+} from "@/lib/errorHandler.js";
+import securityLogger from "@/lib/securityLogger.js";
+import { performHealthCheck, quickHealthCheck, readinessCheck, HEALTH_STATUS } from '@/lib/healthCheck.js';
+import productionLogger, { LOG_CATEGORIES } from '@/lib/productionLogger.js';
 
 // Health check configuration
 const HEALTH_CONFIG = {

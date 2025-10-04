@@ -3,8 +3,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { ensureAdmin } from '../../../../lib/adminAuth.server.js';
-import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '../../../../lib/errorHandler.js';
+import { ensureAdmin } from '@/lib/adminAuth.server.js';
+import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler.js';
 
 export async function POST(request) {
   return withErrorHandling(async (req) => {
