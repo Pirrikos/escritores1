@@ -44,17 +44,18 @@ export default function LoginPage() {
     const redirectUrl = localStorage.getItem('redirectAfterLogin');
     localStorage.removeItem('redirectAfterLogin');
 
-    // Si hay sesión y es admin, respetar redirección a /admin; si no, ir a Home
-    if (session && isAdminUser(session)) {
-      router.push(redirectUrl || '/admin');
-    } else {
-      // Si había una redirección previa que no es admin, úsala; si era admin, ignórala
-      if (redirectUrl && !redirectUrl.startsWith('/admin')) {
-        router.push(redirectUrl);
-      } else {
+    // Si existe una URL de redirección, usarla salvo que apunte a /admin
+    if (redirectUrl) {
+      if (redirectUrl.startsWith('/admin')) {
         router.push('/home');
+      } else {
+        router.push(redirectUrl);
       }
+      return;
     }
+
+    // Sin redirección previa: llevar siempre a Home, tanto admin como no-admin
+    router.push('/home');
   };
 
   const signInWithGoogle = async () => {

@@ -54,15 +54,16 @@ function AuthCallbackContent() {
             const redirectUrl = localStorage.getItem('redirectAfterLogin');
             localStorage.removeItem('redirectAfterLogin');
             
-            // Redirigir según rol: admin respeta /admin; no admin va a Home
-            if (isAdminUser(sessionData.session)) {
-              router.push(redirectUrl || '/admin');
-            } else {
-              if (redirectUrl && !redirectUrl.startsWith('/admin')) {
-                router.push(redirectUrl);
-              } else {
+            // Redirección unificada: si hay redirect previo y apunta a /admin, forzar Home
+            // En otro caso, usar redirect; por defecto, Home
+            if (redirectUrl) {
+              if (redirectUrl.startsWith('/admin')) {
                 router.push('/home');
+              } else {
+                router.push(redirectUrl);
               }
+            } else {
+              router.push('/home');
             }
           } else {
             console.error('No se pudo establecer la sesión después del callback');

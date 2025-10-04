@@ -209,9 +209,9 @@ function HomePageContent() {
           if (sessionData.session && sessionData.session.user) {
             console.log('Sesión establecida exitosamente:', sessionData.session.user.email);
             
-            // Limpiar la URL y redirigir al admin
+            // Limpiar la URL y redirigir al Home
             window.history.replaceState({}, document.title, '/');
-            router.push('/admin');
+            router.push('/home');
           } else {
             console.error('No se pudo establecer la sesión después del callback');
             router.push('/auth/login?error=session_error');
