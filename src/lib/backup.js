@@ -505,7 +505,6 @@ export function stopBackupSystem() {
  */
 export function getBackupStatistics() {
   const registry = getBackupRegistry();
-  const now = new Date();
   
   const stats = {
     totalBackups: registry.length,

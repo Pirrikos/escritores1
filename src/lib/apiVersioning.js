@@ -360,7 +360,7 @@ export function needsMigration(currentVersion, targetVersion) {
          getMigrationInfo(currentVersion, targetVersion).length > 0;
 }
 
-export default {
+const apiVersioning = {
   API_VERSIONS,
   VERSION_INFO,
   extractApiVersion,
@@ -373,3 +373,5 @@ export default {
   getMigrationInfo,
   needsMigration
 };
+
+export default apiVersioning;

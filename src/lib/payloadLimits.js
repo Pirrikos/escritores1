@@ -224,7 +224,7 @@ export function createTimeoutMiddleware(timeoutMs = 30000) {
   };
 }
 
-export default {
+const payloadLimits = {
   PAYLOAD_LIMITS,
   ALLOWED_FILE_TYPES,
   ALLOWED_EXTENSIONS,
@@ -234,3 +234,5 @@ export default {
   createPayloadLimitMiddleware,
   createTimeoutMiddleware
 };
+
+export default payloadLimits;

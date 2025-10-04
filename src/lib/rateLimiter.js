@@ -354,7 +354,7 @@ export function getRateLimitStats() {
   };
   
   // Group by rate limit type
-  activeKeys.forEach(({ key, count, resetTime }) => {
+  activeKeys.forEach(({ key, count }) => {
     const [type] = key.split(':');
     if (!stats.byType[type]) {
       stats.byType[type] = { count: 0, totalRequests: 0 };

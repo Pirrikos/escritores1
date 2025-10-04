@@ -357,7 +357,7 @@ class SecurityLogger {
   }
 
   detectSuspiciousPatterns(userId, timeWindow = 300000) {
-    return this.detectSuspiciousActivity(userId, 'general', { userId });
+    return this.detectSuspiciousActivity(userId, 'general', { userId, timeWindow });
   }
 
   /**

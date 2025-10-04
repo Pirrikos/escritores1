@@ -137,7 +137,7 @@ export const validateURL = (url, allowedProtocols = ['http', 'https']) => {
     }
     
     return { isValid: true, value: url };
-  } catch (error) {
+  } catch {
     return { isValid: false, error: 'Formato de URL inválido' };
   }
 };

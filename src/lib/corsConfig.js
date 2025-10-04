@@ -156,7 +156,7 @@ export const CORS_CONFIGS = {
 /**
  * Get CORS configuration based on request path and method
  */
-export function getCorsConfig(pathname, method = 'GET') {
+export function getCorsConfig(pathname) {
   // Health check endpoints - public access
   if (pathname.includes('/health') || pathname.includes('/status')) {
     return CORS_CONFIGS.public;
@@ -191,11 +191,10 @@ export function getCorsConfig(pathname, method = 'GET') {
  */
 export function applyCorsHeaders(request, response, corsConfig) {
   const { pathname } = new URL(request.url);
-  const method = request.method;
   const origin = request.headers.get('origin');
   
   // Use provided config or get default
-  const config = corsConfig || getCorsConfig(pathname, method);
+  const config = corsConfig || getCorsConfig(pathname);
   
   // Handle origin
   if (typeof config.origin === 'function') {
@@ -246,7 +245,7 @@ export function applyCorsHeaders(request, response, corsConfig) {
 export function corsMiddleware(config = null) {
   return (req, res, next) => {
     const pathname = req.url || '/';
-    const corsConfig = config || getCorsConfig(pathname, req.method);
+    const corsConfig = config || getCorsConfig(pathname);
     const origin = req.headers.origin;
     
     // Handle preflight requests
@@ -325,7 +324,7 @@ export function validateOrigin(origin, allowedOrigins = null) {
   return allowed.includes(origin);
 }
 
-export default {
+const corsConfig = {
   CORS_CONFIGS,
   getCorsConfig,
   applyCorsHeaders,
@@ -333,3 +332,5 @@ export default {
   validateOrigin,
   getAllowedOrigins
 };
+
+export default corsConfig;

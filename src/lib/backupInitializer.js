@@ -249,6 +249,8 @@ if (typeof process !== 'undefined') {
   });
   
   process.on('unhandledRejection', async (reason, promise) => {
+    // Marcar la promesa como usada para evitar advertencias de linter
+    void promise;
     console.error('💥 Promesa rechazada no manejada:', reason);
     
     try {

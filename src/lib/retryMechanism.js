@@ -48,14 +48,12 @@ const DEFAULT_RETRY_CONFIG = {
  */
 export async function withRetry(fn, config = {}) {
   const finalConfig = { ...DEFAULT_RETRY_CONFIG, ...config };
-  let lastError;
   
   for (let attempt = 1; attempt <= finalConfig.maxAttempts; attempt++) {
     try {
       const result = await fn(attempt);
       return result;
     } catch (error) {
-      lastError = error;
       
       // Si es el último intento o el error no es reintentable, lanzar error
       if (attempt === finalConfig.maxAttempts || !finalConfig.retryCondition(error)) {

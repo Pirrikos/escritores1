@@ -361,10 +361,12 @@ if (process.env.NODE_ENV === 'production') {
   }, 5 * 60 * 1000); // Every 5 minutes
 }
 
-export default {
+const healthCheck = {
   performHealthCheck,
   quickHealthCheck,
   readinessCheck,
   HEALTH_STATUS,
   HEALTH_CHECK_CONFIG
 };
+
+export default healthCheck;

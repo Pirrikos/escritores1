@@ -136,7 +136,7 @@ export function detectFileType(fileUrl: string, fileName?: string): FileType {
       const urlObj = new URL(url);
       url = urlObj.pathname;
     } catch (e) {
-      // Si falla el parsing, usar la URL original sin parámetros
+      void e;
     }
   }
   

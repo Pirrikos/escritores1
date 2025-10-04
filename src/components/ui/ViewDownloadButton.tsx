@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { Button } from './Button';
 import { Icon, Icons } from './Icon';
@@ -331,9 +332,11 @@ export function ViewDownloadButton({
       case 'image':
         return (
           <div className="flex justify-center">
-            <img 
-              src={urlToShow} 
+            <Image 
+              src={urlToShow}
               alt={getFileName()}
+              width={1024}
+              height={768}
               className="max-w-full max-h-96 object-contain rounded-lg"
             />
           </div>
@@ -365,7 +368,7 @@ export function ViewDownloadButton({
             <Icon path={Icons.eye} size="xl" className="text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600">Vista previa no disponible para este tipo de archivo</p>
             <p className="text-sm text-gray-500 mt-2">
-              Haz clic en "Abrir en nueva pestaña" para ver el archivo
+              Haz clic en &quot;Abrir en nueva pestaña&quot; para ver el archivo
             </p>
           </div>
         );

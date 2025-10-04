@@ -189,6 +189,7 @@ export function handleDatabaseError(dbError, operation = 'unknown', context = {}
   // Log the database error
   securityLogger.logDatabaseError(dbError, context.table || 'unknown', {
     ...context,
+    operation,
     errorCode: dbError.code,
     errorMessage: dbError.message
   });

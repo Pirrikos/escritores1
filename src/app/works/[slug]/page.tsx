@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import CoverRenderer from '@/components/ui/CoverRenderer';
 import { ViewDownloadButton } from '@/components/ui/ViewDownloadButton';
@@ -65,7 +67,7 @@ function WorkDetailPageContent({
   setLoading: (loading: boolean) => void;
   error: string | null;
   setError: (error: string | null) => void;
-  supabase: any;
+  supabase: SupabaseClient;
 }) {
   const { addToast } = useToast();
 
@@ -149,12 +151,12 @@ function WorkDetailPageContent({
           <p className="text-gray-600 dark:text-gray-400 mb-6">
             La obra que buscas no existe o no está disponible públicamente.
           </p>
-          <a
+          <Link
             href="/library"
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Volver a la biblioteca
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -166,9 +168,9 @@ function WorkDetailPageContent({
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <nav className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
-            <a href="/library" className="hover:text-blue-600 dark:hover:text-blue-400">
+            <Link href="/library" className="hover:text-blue-600 dark:hover:text-blue-400">
               Biblioteca
-            </a>
+            </Link>
             <span>/</span>
             <span className="text-gray-900 dark:text-white">{work.title}</span>
           </nav>
@@ -205,6 +207,7 @@ function WorkDetailPageContent({
                     ) : (
                       // Portada personalizada subida
                       <div className="w-full h-full bg-gray-200 rounded-lg overflow-hidden shadow-lg">
+                        {/* Se recomienda next/image para optimización */}
                         <img 
                           src={work.cover_url} 
                           alt={`Portada de ${work.title}`}
@@ -329,9 +332,9 @@ function WorkDetailPageContent({
             <p>
               Esta obra forma parte de la colección de escritores disponible en nuestra plataforma.
               Puedes explorar más obras de este autor y otros escritores en nuestra{' '}
-              <a href="/library" className="text-blue-600 dark:text-blue-400 hover:underline">
+              <Link href="/library" className="text-blue-600 dark:text-blue-400 hover:underline">
                 biblioteca digital
-              </a>.
+              </Link>.
             </p>
           </div>
         </div>

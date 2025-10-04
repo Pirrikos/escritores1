@@ -88,7 +88,6 @@ async function checkAndSendAlerts(errorType, severity) {
   const recentErrors = Array.from(errorCache.values())
     .filter(error => new Date(error.timestamp).getTime() > oneMinuteAgo);
   
-  const errorsByType = recentErrors.filter(error => error.type === errorType);
   const criticalErrors = recentErrors.filter(error => error.severity === SEVERITY_LEVELS.CRITICAL);
 
   // Verificar si necesitamos alertar

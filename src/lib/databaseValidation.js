@@ -402,7 +402,7 @@ export function validateUserInput(input, options = {}) {
   };
 }
 
-export default {
+const databaseValidation = {
   validateProfile,
   validateWork,
   validatePost,
@@ -413,3 +413,5 @@ export default {
   VALIDATION_LIMITS,
   VALIDATION_ERRORS
 };
+
+export default databaseValidation;

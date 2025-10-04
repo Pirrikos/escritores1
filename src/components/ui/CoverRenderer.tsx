@@ -7,6 +7,12 @@ export type CoverMode = 'auto' | 'template';
 export type PaletteId = 'marino' | 'rojo' | 'negro' | 'verde' | 'purpura';
 export type TemplateId = 'template-1' | 'template-2' | 'template-3' | 'template-4' | 'template-5' | 'template-6' | 'template-7' | 'template-8';
 
+export interface ColorPalette {
+  background: string;
+  text: string;
+  accent: string;
+}
+
 export interface CoverRendererProps {
   mode: CoverMode;
   templateId?: TemplateId;
@@ -84,7 +90,7 @@ const getSafeMargins = (width: number, height: number) => {
 };
 
 // Plantillas predefinidas
-const renderTemplate = (templateId: TemplateId, palette: any, width: number, height: number) => {
+const renderTemplate = (templateId: TemplateId, palette: ColorPalette, width: number, height: number) => {
   // Validación defensiva para palette
   if (!palette || !palette.background || !palette.accent) {
     palette = COLOR_PALETTES.marino;

@@ -78,6 +78,8 @@ class PerformanceMetrics {
 
     // Check for consecutive breaches
     const recentBreaches = this.getRecentBreaches(name, 5 * 60 * 1000); // Last 5 minutes
+    // Track this breach for future statistics/alerts
+    this.alerts.push(breach);
     
     if (recentBreaches.length >= this.alertThreshold) {
       this.triggerAlert(name, recentBreaches);
@@ -234,7 +236,7 @@ export function createPerformanceMiddleware(metricName) {
 
         return response;
       } catch (error) {
-        const duration = timer.end();
+        timer.end();
         
         // Log API error
         productionLogger.logAPIError(
@@ -292,7 +294,7 @@ export {
   PerformanceMetrics
 };
 
-export default {
+const performanceMonitor = {
   PerformanceTimer,
   performanceMetrics,
   createPerformanceMiddleware,
@@ -300,3 +302,5 @@ export default {
   monitorSystemResources,
   PERFORMANCE_THRESHOLDS
 };
+
+export default performanceMonitor;

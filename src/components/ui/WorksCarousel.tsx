@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import CoverRenderer from '@/components/ui/CoverRenderer';
 import { Icon, Icons } from '@/components/ui';
@@ -126,14 +127,18 @@ export default function WorksCarousel({
                         const paletteId = parts[2];
                         const encodedTitle = parts[3];
                         const encodedAuthor = parts[4];
+                        const validTemplateIds = ['template-1','template-2','template-3','template-4','template-5','template-6','template-7','template-8'] as const;
+                        const validPaletteIds = ['marino','rojo','negro','verde','purpura'] as const;
+                        const safeTemplateId = (validTemplateIds as readonly string[]).includes(templateId) ? (templateId as typeof validTemplateIds[number]) : 'template-1';
+                        const safePaletteId = (validPaletteIds as readonly string[]).includes(paletteId) ? (paletteId as typeof validPaletteIds[number]) : 'marino';
                         
                         return (
                           <CoverRenderer
                             mode="template"
-                            templateId={templateId as any}
+                            templateId={safeTemplateId}
                             title={decodeURIComponent(encodedTitle || work.title)}
                             author={decodeURIComponent(encodedAuthor || work.profiles?.display_name || 'Autor')}
-                            paletteId={paletteId as any}
+                            paletteId={safePaletteId}
                             width={180}
                             height={270}
                             className="shadow-md rounded-sm"
@@ -143,9 +148,11 @@ export default function WorksCarousel({
                     ) : (
                       // Portada personalizada subida
                       <div className="w-[180px] h-[270px] bg-gray-200 rounded overflow-hidden shadow-md">
-                        <img 
-                          src={work.cover_url} 
+                        <Image
+                          src={work.cover_url}
                           alt={`Portada de ${work.title}`}
+                          width={180}
+                          height={270}
                           className="w-full h-full object-cover"
                         />
                       </div>
