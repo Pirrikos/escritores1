@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { isAdminUser } from '@/lib/adminAuth';
+import { Icon, Icons } from '@/components/ui';
 
 interface AppHeaderProps {
   className?: string;
@@ -14,11 +15,13 @@ export default function AppHeader({ className = '' }: AppHeaderProps) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string>('');
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [hasSession, setHasSession] = useState<boolean>(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const publishRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -35,9 +38,12 @@ export default function AppHeader({ className = '' }: AppHeaderProps) {
       // Sincronizar perfil para corregir alias basados en email
       if (data.session) {
         try {
-          fetch('/api/system/sync-profile', { method: 'POST' })
+          fetch('/api/system/sync-profile', { method: 'POST', keepalive: true })
             .then(() => {
-              try { router.refresh(); } catch {}
+              // Evitar refrescos en desarrollo para no provocar aborts/ruido
+              if (process.env.NODE_ENV === 'production') {
+                try { router.refresh(); } catch {}
+              }
             })
             .catch(() => {});
         } catch {}
@@ -56,11 +62,19 @@ export default function AppHeader({ className = '' }: AppHeaderProps) {
       // Reintentar sincronización en cambios de sesión
       if (session) {
         try {
-          fetch('/api/system/sync-profile', { method: 'POST' })
+          fetch('/api/system/sync-profile', { method: 'POST', keepalive: true })
             .then(() => {
-              try { router.refresh(); } catch {}
+              // Evitar refrescos en desarrollo para no provocar aborts/ruido
+              if (process.env.NODE_ENV === 'production') {
+                try { router.refresh(); } catch {}
+              }
             })
-            .catch(() => {});
+            .catch((err) => {
+              // Silenciar errores de abort en dev
+              if (process.env.NODE_ENV === 'production') {
+                console.warn('sync-profile error', err);
+              }
+            });
         } catch {}
       }
     });
@@ -69,6 +83,9 @@ export default function AppHeader({ className = '' }: AppHeaderProps) {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
+      }
+      if (publishRef.current && !publishRef.current.contains(e.target as Node)) {
+        setPublishOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -90,7 +107,108 @@ export default function AppHeader({ className = '' }: AppHeaderProps) {
     : '';
 
   return (
-    <div className={`w-full flex justify-end ${className}`}>
+    <div className={`w-full flex justify-between items-center ${className}`}>
+      {/* Navegación izquierda */}
+      <div className="flex items-center gap-2">
+        {/* Botón Inicio */}
+        <Link
+          href="/home"
+          className="inline-flex items-center gap-2 rounded-full bg-white/80 backdrop-blur px-3 py-2 shadow-sm border border-slate-200 hover:bg-white transition-colors text-slate-700"
+          aria-label="Volver a inicio"
+          title="Inicio"
+        >
+          <Icon path={Icons.dashboard} size="sm" />
+          <span className="text-sm">Inicio</span>
+        </Link>
+        {/* Botón Mis lecturas */}
+        <Link
+          href="/mis-lecturas"
+          className="inline-flex items-center gap-2 rounded-full bg-white/80 backdrop-blur px-3 py-2 shadow-sm border border-slate-200 hover:bg-white transition-colors text-slate-700"
+          aria-label="Mis lecturas"
+          title="Mis lecturas"
+        >
+          <Icon path={Icons.book} size="sm" />
+          <span className="text-sm">Mis lecturas</span>
+        </Link>
+        {/* Botón Actividad reciente */}
+        <Link
+          href="/actividad-reciente"
+          className="inline-flex items-center gap-2 rounded-full bg-white/80 backdrop-blur px-3 py-2 shadow-sm border border-slate-200 hover:bg-white transition-colors text-slate-700"
+          aria-label="Actividad reciente"
+          title="Actividad reciente"
+        >
+          <Icon path={Icons.lightning} size="sm" />
+          <span className="text-sm">Actividad</span>
+        </Link>
+
+        {hasSession && (
+          <div className="relative" ref={publishRef}>
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={publishOpen}
+              onClick={() => setPublishOpen((v) => !v)}
+              className="inline-flex items-center gap-2 rounded-full bg-white/80 backdrop-blur px-3 py-2 shadow-sm border border-slate-200 hover:bg-white transition-colors text-slate-700"
+              title="Publicar"
+            >
+              <span className="text-sm">Publicar</span>
+              <svg
+                className={`w-4 h-4 text-slate-600 transition-transform ${publishOpen ? 'rotate-180' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+
+            {publishOpen && (
+              <div
+                role="menu"
+                aria-label="Menú publicar"
+                className="absolute left-0 mt-2 w-56 rounded-lg bg-white shadow-lg border border-slate-200 py-2 z-50"
+              >
+                <Link
+                  href="/write"
+                  role="menuitem"
+                  className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                  onClick={() => setPublishOpen(false)}
+                >
+                  Crear post
+                </Link>
+                <Link
+                  href="/upload/works"
+                  role="menuitem"
+                  className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                  onClick={() => setPublishOpen(false)}
+                >
+                  Subir obra
+                </Link>
+                <Link
+                  href="/upload/obra-por-capitulos"
+                  role="menuitem"
+                  className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                  onClick={() => setPublishOpen(false)}
+                >
+                  Subir obra por capítulos
+                </Link>
+                <Link
+                  href="/upload/chapters"
+                  role="menuitem"
+                  className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                  onClick={() => setPublishOpen(false)}
+                >
+                  Subir capítulo
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="relative" ref={menuRef}>
         <button
           type="button"
@@ -136,6 +254,7 @@ export default function AppHeader({ className = '' }: AppHeaderProps) {
             aria-label="Menú de usuario"
             className="absolute right-0 mt-2 w-48 rounded-lg bg-white shadow-lg border border-slate-200 py-2 z-50"
           >
+            {/* Opciones de publicar eliminadas del menú del avatar */}
             <Link
               href="/library"
               role="menuitem"
@@ -175,16 +294,16 @@ export default function AppHeader({ className = '' }: AppHeaderProps) {
                   onClick={async (e) => {
                     e.preventDefault();
                     setOpen(false);
-                    try {
-                      await supabase.auth.signOut();
-                      window.location.href = '/';
-                    } catch (err) {
-                      console.error('Error al cerrar sesión', err);
-                    }
-                  }}
-                  title="Cerrar sesión"
-                >
-                  Cerrar sesión
+                try {
+                  await supabase.auth.signOut();
+                  window.location.href = '/';
+                } catch (err) {
+                  // Silenciar errores de cierre de sesión en cliente
+                }
+              }}
+              title="Cerrar sesión"
+            >
+              Cerrar sesión
                 </button>
               </>
             )}

@@ -4,13 +4,12 @@ import { useState, useMemo, useEffect } from "react";
 import { getSupabaseBrowserClient } from "../../../lib/supabaseClient";
 import { validatePost, validateUserInput, VALIDATION_LIMITS } from '@/lib/databaseValidation';
 import { sanitizeText, normalizeText } from '@/lib/sanitization';
-import { Button, Input, Textarea, Card, CardHeader, CardBody } from "@/components/ui";
+import { Button, Input, Textarea, Card, CardHeader, CardBody, AppHeader } from "@/components/ui";
 import FileSelector from '@/components/ui/FileSelector';
 import CoverRenderer from '@/components/ui/CoverRenderer';
 import { useToast, ToastProvider } from '@/contexts/ToastContext';
 import ToastContainer from '@/components/ui/ToastContainer';
-import AdminLayout from '@/components/admin/AdminLayout';
-import { AdminGuard } from '@/lib/adminAuth';
+import Link from 'next/link';
 
 function UploadWorksContent() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -36,7 +35,8 @@ function UploadWorksContent() {
     title: '',
     synopsis: '',
     isbn: '',
-    status: 'draft'
+    status: 'draft',
+    category: 'otras'
   });
 
   const [workFiles, setWorkFiles] = useState({
@@ -52,6 +52,21 @@ function UploadWorksContent() {
   });
 
   const [errors, setErrors] = useState({});
+
+  // Categorías permitidas (coherentes con el catálogo público)
+  // Nota: 'otras' se ofrece como opción explícita, no se duplica aquí
+  const WORK_CATEGORIES = [
+    'Novela',
+    'Cuento',
+    'Poesía',
+    'Teatro',
+    'Ensayo',
+    'Fantasía',
+    'Ciencia ficción',
+    'Romance',
+    'Misterio',
+    'Terror',
+  ];
 
   // Validación del formulario para obras
   const validateWorkForm = () => {
@@ -80,6 +95,8 @@ function UploadWorksContent() {
     if (!workFiles.work) {
       newErrors.work = 'Debe subir el archivo de la obra';
     }
+
+    // La categoría es opcional; si no hay categoría válida, se asigna 'otras'
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -191,6 +208,56 @@ function UploadWorksContent() {
       .trim('-'); // Remover guiones al inicio y final
   };
 
+  // Subida a bucket 'works': intenta cliente primero y cae al endpoint server si falla por RLS
+  const uploadToWorksWithFallback = async (path, file) => {
+    // Intento directo desde el cliente (respeta las políticas de Storage)
+    const { data, error } = await supabase.storage
+      .from('works')
+      .upload(path, file);
+
+    if (!error) return data;
+
+    // Fallback al endpoint server (usa service role y valida path en el backend)
+    try {
+      const fd = new FormData();
+      fd.append('path', path);
+      fd.append('file', file);
+      const res = await fetch('/api/storage/upload-work', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || 'Error subiendo archivo (fallback)');
+      }
+      return { path };
+    } catch (e) {
+      const message = error?.message ? `Upload denegado por RLS: ${error.message}` : e.message;
+      throw new Error(message);
+    }
+  };
+
+  // Subida a bucket 'chapters': intenta cliente primero y cae al endpoint server si falla por RLS
+  const uploadToChaptersWithFallback = async (path, file) => {
+    const { data, error } = await supabase.storage
+      .from('chapters')
+      .upload(path, file);
+
+    if (!error) return data;
+
+    try {
+      const fd = new FormData();
+      fd.append('path', path);
+      fd.append('file', file);
+      const res = await fetch('/api/storage/upload-chapter', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || 'Error subiendo capítulo (fallback)');
+      }
+      return { path };
+    } catch (e) {
+      const message = error?.message ? `Upload capítulo denegado por RLS: ${error.message}` : e.message;
+      throw new Error(message);
+    }
+  };
+
   // Subir obra
   const handleWorkSubmit = async (e) => {
     e.preventDefault();
@@ -221,7 +288,8 @@ function UploadWorksContent() {
         title: sanitizeText(workFormData.title),
         synopsis: sanitizeText(workFormData.synopsis),
         isbn: workFormData.isbn ? sanitizeText(workFormData.isbn) : null,
-        status: workFormData.status
+        status: workFormData.status,
+        category: WORK_CATEGORIES.includes(workFormData.category) ? workFormData.category : 'otras'
       };
 
       // Generar slug único
@@ -245,12 +313,7 @@ function UploadWorksContent() {
       // Subir portada si existe, o generar una automática
       if (workFiles.cover) {
         const coverPath = `${session.user.id}/cover-${slug}-${Date.now()}.${workFiles.cover.name.split('.').pop()}`;
-        const { data: coverData, error: coverError } = await supabase.storage
-          .from('works')
-          .upload(coverPath, workFiles.cover);
-
-        if (coverError) throw coverError;
-
+        await uploadToWorksWithFallback(coverPath, workFiles.cover);
         // Para buckets privados, guardamos el path del archivo
         coverUrl = coverPath;
       } else {
@@ -260,16 +323,11 @@ function UploadWorksContent() {
 
       // Subir archivo de la obra
       const workPath = `${session.user.id}/obra-${slug}-${Date.now()}.${workFiles.work.name.split('.').pop()}`;
-      const { data: workData, error: workError } = await supabase.storage
-        .from('works')
-        .upload(workPath, workFiles.work);
-
-      if (workError) throw workError;
-
+      await uploadToWorksWithFallback(workPath, workFiles.work);
       // Para buckets privados, guardamos el path del archivo
       workUrl = workPath;
 
-      // Insertar obra en la base de datos
+      // Insertar obra en la base de datos (con fallback si falla enum de categoría)
       const { data, error } = await supabase
         .from('works')
         .insert({
@@ -277,6 +335,7 @@ function UploadWorksContent() {
           synopsis: sanitizedData.synopsis,
           isbn: sanitizedData.isbn,
           status: sanitizedData.status,
+          category: sanitizedData.category,
           author_id: session.user.id,
           slug: slug,
           cover_url: coverUrl,
@@ -289,7 +348,37 @@ function UploadWorksContent() {
         .select()
         .single();
 
-      if (error) throw error;
+      let insertedWork = data;
+      if (error) {
+        const msg = error.message || '';
+        const isEnumCategoryError = msg.includes('invalid input value for enum') || msg.includes('work_category');
+        if (isEnumCategoryError) {
+          const { data: fallbackData, error: retryError } = await supabase
+            .from('works')
+            .insert({
+              title: sanitizedData.title,
+              synopsis: sanitizedData.synopsis,
+              isbn: sanitizedData.isbn,
+              status: sanitizedData.status,
+              category: 'otras',
+              author_id: session.user.id,
+              slug: slug,
+              cover_url: coverUrl,
+              file_url: workUrl,
+              file_type: workFiles.work.type,
+              file_size: workFiles.work.size,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+          if (retryError) throw retryError;
+          addToast({ message: 'La categoría seleccionada no está disponible. Se usó "otras".', type: 'info' });
+          insertedWork = fallbackData;
+        } else {
+          throw error;
+        }
+      }
 
       addToast({ message: 'Obra subida exitosamente', type: 'success' });
       
@@ -298,7 +387,8 @@ function UploadWorksContent() {
         title: '',
         synopsis: '',
         isbn: '',
-        status: 'draft'
+        status: 'draft',
+        category: 'otras'
       });
       setWorkFiles({
         cover: null,
@@ -351,27 +441,17 @@ function UploadWorksContent() {
       let coverUrl = null;
       let chapterUrl = null;
 
-      // Subir portada si existe
+      // Subir portada si existe (prefijo por uid)
       if (chapterFiles.cover) {
-        const coverPath = `cover-${slug}-${Date.now()}.${chapterFiles.cover.name.split('.').pop()}`;
-        const { data: coverData, error: coverError } = await supabase.storage
-          .from('chapters')
-          .upload(coverPath, chapterFiles.cover);
-
-        if (coverError) throw coverError;
-
+        const coverPath = `${session.user.id}/cover-${slug}-${Date.now()}.${chapterFiles.cover.name.split('.').pop()}`;
+        await uploadToChaptersWithFallback(coverPath, chapterFiles.cover);
         // Para buckets privados, guardamos el path del archivo
         coverUrl = coverPath;
       }
 
-      // Subir archivo del capítulo
-      const chapterPath = `capitulo-${slug}-${Date.now()}.${chapterFiles.chapter.name.split('.').pop()}`;
-      const { data: chapterData, error: chapterError } = await supabase.storage
-        .from('chapters')
-        .upload(chapterPath, chapterFiles.chapter);
-
-      if (chapterError) throw chapterError;
-
+      // Subir archivo del capítulo (prefijo por uid)
+      const chapterPath = `${session.user.id}/capitulo-${slug}-${Date.now()}.${chapterFiles.chapter.name.split('.').pop()}`;
+      await uploadToChaptersWithFallback(chapterPath, chapterFiles.chapter);
       // Para buckets privados, guardamos el path del archivo
       chapterUrl = chapterPath;
 
@@ -420,19 +500,32 @@ function UploadWorksContent() {
     }
   };
 
+  if (!session) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold">Acceso requerido</h2>
+          </CardHeader>
+          <CardBody>
+            <p className="text-slate-700 mb-4">Debes iniciar sesión para subir obras.</p>
+            <Link
+              href="/auth/login"
+              className="inline-flex items-center gap-2 rounded-full bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700"
+            >
+              Iniciar sesión
+            </Link>
+          </CardBody>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <AdminGuard session={session}>
-      <AdminLayout activeTab="upload-works">
-        <div className="max-w-4xl mx-auto space-y-8">
-          {/* Header */}
-          <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-200/60">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900 mb-2">Subir Obra</h1>
-                <p className="text-slate-600">Sube obras completas</p>
-              </div>
-            </div>
-          </div>
+        <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+          {/* Encabezado principal */}
+          <AppHeader className="mb-6" />
+          <h1 className="text-3xl font-bold text-slate-900">Subir Obra</h1>
 
           {/* Formulario para obras */}
           <div className="bg-white rounded-2xl shadow-lg border border-slate-200/60">
@@ -457,7 +550,8 @@ function UploadWorksContent() {
                                    field === 'synopsis' ? 'Sinopsis' : 
                                    field === 'isbn' ? 'ISBN' : 
                                    field === 'work' ? 'Archivo de la obra' : 
-                                   field === 'cover' ? 'Imagen de portada' : field}:
+                                   field === 'cover' ? 'Imagen de portada' :
+                                   field === 'category' ? 'Categoría' : field}:
                                 </strong> {error}
                               </span>
                             </li>
@@ -544,6 +638,24 @@ function UploadWorksContent() {
                       >
                         <option value="draft">Borrador</option>
                         <option value="published">Publicado</option>
+                      </select>
+                    </div>
+
+                    {/* Categoría */}
+                    <div>
+                      <label htmlFor="work-category" className="block text-sm font-medium text-slate-700 mb-2">
+                        Categoría *
+                      </label>
+                      <select
+                        id="work-category"
+                        value={workFormData.category}
+                        onChange={(e) => handleWorkInputChange('category', e.target.value)}
+                        className={"w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"}
+                      >
+                        <option value="otras">Otras</option>
+                        {WORK_CATEGORIES.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -693,8 +805,6 @@ function UploadWorksContent() {
             </div>
           </div>
         </div>
-      </AdminLayout>
-    </AdminGuard>
   );
 }
 

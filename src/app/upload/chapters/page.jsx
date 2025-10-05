@@ -4,13 +4,12 @@ import { useState, useMemo, useEffect } from "react";
 import { getSupabaseBrowserClient } from "../../../lib/supabaseClient";
 import { validatePost, validateUserInput, VALIDATION_LIMITS } from '@/lib/databaseValidation';
 import { sanitizeText, normalizeText } from '@/lib/sanitization';
-import { Button, Input, Textarea, Card, CardHeader, CardBody } from "@/components/ui";
+import { Button, Input, Textarea, Card, CardHeader, CardBody, AppHeader } from "@/components/ui";
 import FileSelector from '@/components/ui/FileSelector';
 import CoverRenderer from '@/components/ui/CoverRenderer';
 import { useToast, ToastProvider } from '@/contexts/ToastContext';
 import ToastContainer from '@/components/ui/ToastContainer';
-import AdminLayout from '@/components/admin/AdminLayout';
-import { AdminGuard } from '@/lib/adminAuth';
+import Link from 'next/link';
 
 function UploadChaptersContent() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -80,7 +79,7 @@ function UploadChaptersContent() {
     work_id: '',
     chapter_number: 1,
     status: 'draft',
-    is_independent: false
+    is_independent: true
   });
 
   const [chapterFiles, setChapterFiles] = useState({
@@ -301,19 +300,32 @@ function UploadChaptersContent() {
     }
   };
 
+  if (!session) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold">Acceso requerido</h2>
+          </CardHeader>
+          <CardBody>
+            <p className="text-slate-700 mb-4">Debes iniciar sesión para subir capítulos.</p>
+            <Link
+              href="/auth/login"
+              className="inline-flex items-center gap-2 rounded-full bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700"
+            >
+              Iniciar sesión
+            </Link>
+          </CardBody>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <AdminGuard session={session}>
-      <AdminLayout activeTab="upload-chapters">
-        <div className="max-w-4xl mx-auto space-y-8">
-          {/* Header */}
-          <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-200/60">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900 mb-2">Subir Capítulo</h1>
-                <p className="text-slate-600">Sube capítulos individuales</p>
-              </div>
-            </div>
-          </div>
+        <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+          {/* Encabezado principal */}
+          <AppHeader className="mb-6" />
+          <h1 className="text-3xl font-bold text-slate-900">Subir Capítulo</h1>
 
           {/* Formulario para capítulos */}
           <div className="bg-white rounded-2xl shadow-lg border border-slate-200/60">
@@ -347,59 +359,7 @@ function UploadChaptersContent() {
                       </div>
                     )}
 
-                    {/* Obra */}
-                    {/* Tipo de capítulo */}
-                    <div>
-                      <label className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={chapterFormData.is_independent}
-                          onChange={(e) => {
-                            const isIndependent = e.target.checked;
-                            setChapterFormData(prev => ({
-                              ...prev,
-                              is_independent: isIndependent,
-                              work_id: isIndependent ? '' : prev.work_id
-                            }));
-                          }}
-                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm font-medium text-slate-700">
-                          Capítulo independiente
-                        </span>
-                      </label>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Marca esta opción si el capítulo no pertenece a ninguna obra específica
-                      </p>
-                    </div>
-
-                    {/* Obra - Solo mostrar si no es independiente */}
-                    {!chapterFormData.is_independent && (
-                      <div>
-                        <label htmlFor="chapter-work" className="block text-sm font-medium text-slate-700 mb-2">
-                          Obra *
-                        </label>
-                        <select
-                          id="chapter-work"
-                          value={chapterFormData.work_id}
-                          onChange={(e) => handleChapterInputChange('work_id', e.target.value)}
-                          className={`w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.work_id ? 'border-red-500' : ''}`}
-                        >
-                          <option value="">Selecciona una obra</option>
-                          {availableWorks.map((work) => (
-                            <option key={work.id} value={work.id}>
-                              {work.title}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.work_id && (
-                          <p className="mt-1 text-sm text-red-600">{errors.work_id}</p>
-                        )}
-                        <p className="mt-1 text-sm text-slate-500">
-                          Selecciona la obra a la que pertenece este capítulo
-                        </p>
-                      </div>
-                    )}
+                    {/* Capítulo independiente por defecto; se elimina el selector de Obra */}
 
                     {/* Título */}
                     <div>
@@ -609,8 +569,6 @@ function UploadChaptersContent() {
             </div>
           </div>
         </div>
-      </AdminLayout>
-    </AdminGuard>
   );
 }
 

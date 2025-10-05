@@ -4,6 +4,12 @@
       "maxDuration": 30
     }
   },
+  "crons": [
+    {
+      "path": "/api/storage/clean-orphans",
+      "schedule": "0 3 * * *" // diario a las 03:00 UTC
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

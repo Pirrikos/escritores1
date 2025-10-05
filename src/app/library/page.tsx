@@ -14,6 +14,7 @@ interface Post {
   author_id: string;
   created_at: string;
   published_at?: string;
+  status?: 'draft' | 'published';
   profiles?: {
     display_name: string;
   };
@@ -26,6 +27,7 @@ interface Work {
   author_id: string;
   created_at: string;
   cover_url?: string;
+  status?: 'draft' | 'published';
   profiles: {
     display_name: string;
   };
@@ -36,8 +38,11 @@ interface Chapter {
   title: string;
   author_id: string;
   created_at: string;
+  published_at?: string;
   cover_url?: string;
   slug?: string;
+  status?: 'draft' | 'published';
+  work_id?: string | null;
   profiles: {
     display_name: string;
   };
@@ -51,6 +56,8 @@ function LibraryContent() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [works, setWorks] = useState<Work[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [deletingIds, setDeletingIds] = useState<Record<string, boolean>>({});
+  const [publishingIds, setPublishingIds] = useState<Record<string, boolean>>({});
 
   const loadPosts = useCallback(async (userId: string) => {
     try {
@@ -63,11 +70,12 @@ function LibraryContent() {
           author_id,
           created_at,
           published_at,
+          status,
           profiles!posts_author_id_fkey (
             display_name
           )
         `)
-        .eq('status', 'published')
+        .in('status', ['draft', 'published'])
         .eq('author_id', userId)
         .order('created_at', { ascending: false });
 
@@ -98,11 +106,12 @@ function LibraryContent() {
           author_id,
           created_at,
           cover_url,
+          status,
           profiles!works_author_id_fkey (
             display_name
           )
         `)
-        .eq('status', 'published')
+        .in('status', ['draft', 'published'])
         .eq('author_id', userId)
         .order('created_at', { ascending: false });
 
@@ -131,13 +140,16 @@ function LibraryContent() {
           title,
           author_id,
           created_at,
+          published_at,
           slug,
           cover_url,
+          status,
+          work_id,
           profiles!chapters_author_id_fkey (
             display_name
           )
         `)
-        .eq('status', 'published')
+        .in('status', ['draft', 'published'])
         .eq('author_id', userId)
         .order('created_at', { ascending: false });
 
@@ -202,6 +214,189 @@ function LibraryContent() {
     };
   }, [supabase, loadPosts, loadWorks, loadChapters]);
 
+  // Limpieza automática de archivos huérfanos en Storage al iniciar sesión
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    // Ejecutar en background; no bloquear la UI
+    fetch('/api/storage/clean-orphans', { method: 'POST' }).catch(() => {});
+  }, [session?.user?.id]);
+
+  // Publicados vs borradores y acción de publicar
+  const publishedPosts = posts.filter((p) => p.status === 'published');
+  const draftPosts = posts.filter((p) => p.status !== 'published');
+  const publishedWorks = works.filter((w) => w.status === 'published');
+  const draftWorks = works.filter((w) => w.status !== 'published');
+  const publishedChapters = chapters.filter((c) => c.status === 'published');
+  const draftChapters = chapters.filter((c) => c.status !== 'published');
+
+  // IDs de obras que tienen capítulos (del usuario)
+  const workIdsWithChapters = new Set(
+    chapters
+      .map((c) => c.work_id)
+      .filter((id): id is string => !!id)
+  );
+  const publishedSerialWorks = publishedWorks.filter((w) => workIdsWithChapters.has(w.id));
+  const draftSerialWorks = draftWorks.filter((w) => workIdsWithChapters.has(w.id));
+
+  const publishItem = async (type: 'posts' | 'works' | 'chapters', id: string) => {
+    setPublishingIds((prev) => ({ ...prev, [`${type}:${id}`]: true }));
+    const payload: any = { status: 'published' };
+    if (type !== 'works') {
+      payload.published_at = new Date().toISOString();
+    }
+    const { data: updatedRows, error } = await supabase
+      .from(type)
+      .update(payload)
+      .eq('id', id)
+      .eq('author_id', session?.user?.id)
+      .select('id, status, published_at');
+    if (error) {
+      console.error('Error publicando', type, error);
+      setPublishingIds((prev) => ({ ...prev, [`${type}:${id}`]: false }));
+      return;
+    }
+    if (!updatedRows || (Array.isArray(updatedRows) && updatedRows.length === 0)) {
+      // Aviso si no se afectó ninguna fila (sesión/autor no coincide)
+      window.alert('No se pudo publicar: verifica tu sesión o permisos.');
+      setPublishingIds((prev) => ({ ...prev, [`${type}:${id}`]: false }));
+      return;
+    }
+    const updatedRow = Array.isArray(updatedRows) ? updatedRows[0] : updatedRows;
+    // Actualizar arrays locales sin recargar
+    if (type === 'posts') {
+      const updated: Post[] = posts.map((p): Post => (
+        p.id === id
+          ? { ...p, status: 'published', published_at: (updatedRow as any)?.published_at || new Date().toISOString() }
+          : p
+      ));
+      setPosts(updated);
+    } else if (type === 'works') {
+      const updated: Work[] = works.map((w): Work => (
+        w.id === id
+          ? { ...w, status: 'published' }
+          : w
+      ));
+      setWorks(updated);
+    } else {
+      const updated: Chapter[] = chapters.map((c): Chapter => (
+        c.id === id
+          ? { ...c, status: 'published', published_at: (updatedRow as any)?.published_at || new Date().toISOString() }
+          : c
+      ));
+      setChapters(updated);
+    }
+    setPublishingIds((prev) => ({ ...prev, [`${type}:${id}`]: false }));
+  };
+
+  const deleteItem = async (type: 'posts' | 'works' | 'chapters', id: string) => {
+    const labels: Record<typeof type, string> = {
+      posts: 'post',
+      works: 'obra',
+      chapters: 'capítulo',
+    } as const;
+    const confirmed = window.confirm(`¿Seguro que quieres borrar este ${labels[type]}? Esta acción no se puede deshacer.`);
+    if (!confirmed) return;
+    setDeletingIds((prev) => ({ ...prev, [`${type}:${id}`]: true }));
+    
+    // Recoger rutas de archivos para limpieza de Storage antes de borrar en DB
+    const extractRel = (bucket: 'works' | 'chapters', filePath?: string | null) => {
+      if (!filePath) return null;
+      const fp = String(filePath);
+      if (fp.startsWith('http')) return null; // URL externa
+      if (fp.startsWith('preview:')) return null; // portada generada sin archivo
+      if (fp.startsWith(`${bucket}/`)) return fp.substring(`${bucket}/`.length);
+      return fp;
+    };
+
+    let workFiles: string[] = [];
+    let chapterFiles: string[] = [];
+    try {
+      if (type === 'works') {
+        const { data: workData } = await supabase
+          .from('works')
+          .select('file_url, cover_image_url, cover_url')
+          .eq('id', id)
+          .limit(1)
+          .maybeSingle();
+        if (workData) {
+          const wf = [
+            extractRel('works', (workData as any).file_url),
+            extractRel('works', (workData as any).cover_image_url),
+            extractRel('works', (workData as any).cover_url),
+          ].filter(Boolean) as string[];
+          workFiles.push(...wf);
+        }
+        const { data: chData } = await supabase
+          .from('chapters')
+          .select('file_url, cover_url')
+          .eq('work_id', id);
+        if (Array.isArray(chData)) {
+          for (const ch of chData) {
+            const cf = [
+              extractRel('chapters', (ch as any).file_url),
+              extractRel('chapters', (ch as any).cover_url),
+            ].filter(Boolean) as string[];
+            chapterFiles.push(...cf);
+          }
+        }
+      } else if (type === 'chapters') {
+        const { data: ch } = await supabase
+          .from('chapters')
+          .select('file_url, cover_url')
+          .eq('id', id)
+          .limit(1)
+          .maybeSingle();
+        if (ch) {
+          const cf = [
+            extractRel('chapters', (ch as any).file_url),
+            extractRel('chapters', (ch as any).cover_url),
+          ].filter(Boolean) as string[];
+          chapterFiles.push(...cf);
+        }
+      }
+    } catch (e) {
+      console.warn('No se pudieron preparar rutas de archivos para limpieza:', e);
+    }
+
+    const { error } = await supabase
+      .from(type)
+      .delete()
+      .eq('id', id)
+      .eq('author_id', session?.user?.id);
+    if (error) {
+      console.error('Error borrando', type, error);
+      return;
+    }
+
+    // Limpieza de archivos en Storage (best-effort)
+    try {
+      if (workFiles.length > 0) {
+        const { error: rmWErr } = await supabase.storage.from('works').remove(workFiles);
+        if (rmWErr) console.warn('No se pudieron borrar archivos de works:', rmWErr.message);
+      }
+      if (chapterFiles.length > 0) {
+        const { error: rmCErr } = await supabase.storage.from('chapters').remove(chapterFiles);
+        if (rmCErr) console.warn('No se pudieron borrar archivos de chapters:', rmCErr.message);
+      }
+    } catch (e) {
+      console.warn('Error durante limpieza de Storage:', e);
+    }
+
+    if (type === 'posts') {
+      setPosts((prev) => prev.filter((p) => p.id !== id));
+    } else if (type === 'works') {
+      // Al borrar obras, capítulos asociados con work_id se borran en cascada (DB)
+      setWorks((prev) => prev.filter((w) => w.id !== id));
+      // Refrescar capítulos desde la DB para reflejar el borrado en cascada
+      if (session?.user?.id) {
+        try { await loadChapters(session.user.id); } catch {}
+      }
+    } else {
+      setChapters((prev) => prev.filter((c) => c.id !== id));
+    }
+    setDeletingIds((prev) => ({ ...prev, [`${type}:${id}`]: false }));
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
@@ -221,25 +416,175 @@ function LibraryContent() {
         ) : (
           <div className="space-y-12">
             <PostsCarousel 
-              posts={posts}
+              posts={publishedPosts}
               title="Mis posts"
               description="Tus publicaciones recientes"
               className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+              renderItemFooter={(p) => (
+                <div className="flex items-center justify-center">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={(e) => { e.stopPropagation(); deleteItem('posts', p.id); }}
+                    disabled={!!deletingIds[`posts:${p.id}`]}
+                    aria-label="Eliminar post"
+                  >
+                    {deletingIds[`posts:${p.id}`] ? 'Eliminando…' : 'Eliminar'}
+                  </button>
+                </div>
+              )}
             />
 
+            {/* Botón de borrar ya está debajo de cada tarjeta; se elimina la sección aparte */}
+
+            {draftPosts.length > 0 && (
+              <PostsCarousel 
+                posts={draftPosts}
+                title="Borradores de posts"
+                description="Publica tus borradores cuando estén listos"
+                className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+                renderItemFooter={(p) => (
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      className="inline-flex items-center gap-2 rounded-md bg-indigo-600 text-white px-3 py-2 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                      onClick={(e) => { e.stopPropagation(); publishItem('posts', p.id); }}
+                      disabled={!!publishingIds[`posts:${p.id}`]}
+                      aria-label="Publicar post"
+                    >
+                      {publishingIds[`posts:${p.id}`] ? 'Publicando…' : 'Publicar'}
+                    </button>
+                    <button
+                      className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                      onClick={(e) => { e.stopPropagation(); deleteItem('posts', p.id); }}
+                      disabled={!!deletingIds[`posts:${p.id}`]}
+                      aria-label="Eliminar post"
+                    >
+                      {deletingIds[`posts:${p.id}`] ? 'Eliminando…' : 'Eliminar'}
+                    </button>
+                  </div>
+                )}
+              />
+            )}
+
             <WorksCarousel 
-              works={works}
+              works={publishedWorks}
               title="Mis obras"
               description="Tus libros y obras completas"
               className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+              renderItemFooter={(w) => (
+                <div className="flex items-center justify-center">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={(e) => { e.stopPropagation(); deleteItem('works', w.id); }}
+                    disabled={!!deletingIds[`works:${w.id}`]}
+                    aria-label="Eliminar obra"
+                  >
+                    {deletingIds[`works:${w.id}`] ? 'Eliminando…' : 'Eliminar'}
+                  </button>
+                </div>
+              )}
             />
 
+            {/* Se elimina la sección de administración separada para obras publicadas */}
+
+            {draftSerialWorks.length > 0 && (
+              <WorksCarousel 
+                works={draftSerialWorks}
+                title="Borradores de obras por capítulos"
+                description="Publica tus obras seriadas cuando estén listas"
+                className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+                renderItemFooter={(w) => (
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      className="inline-flex items-center gap-2 rounded-md bg-indigo-600 text-white px-3 py-2 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                      onClick={(e) => { e.stopPropagation(); publishItem('works', w.id); }}
+                      disabled={!!publishingIds[`works:${w.id}`]}
+                      aria-label="Publicar obra"
+                    >
+                      {publishingIds[`works:${w.id}`] ? 'Publicando…' : 'Publicar'}
+                    </button>
+                    <button
+                      className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                      onClick={(e) => { e.stopPropagation(); deleteItem('works', w.id); }}
+                      disabled={!!deletingIds[`works:${w.id}`]}
+                      aria-label="Eliminar obra"
+                    >
+                      {deletingIds[`works:${w.id}`] ? 'Eliminando…' : 'Eliminar'}
+                    </button>
+                  </div>
+                )}
+              />
+            )}
+
+            {publishedSerialWorks.length > 0 && (
+              <WorksCarousel 
+                works={publishedSerialWorks}
+                title="Mis obras por capítulos"
+                description="Tus obras seriadas publicadas"
+                className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+                renderItemFooter={(w) => (
+                  <div className="flex items-center justify-center">
+                    <button
+                      className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                      onClick={(e) => { e.stopPropagation(); deleteItem('works', w.id); }}
+                      disabled={!!deletingIds[`works:${w.id}`]}
+                      aria-label="Eliminar obra"
+                    >
+                      {deletingIds[`works:${w.id}`] ? 'Eliminando…' : 'Eliminar'}
+                    </button>
+                  </div>
+                )}
+              />
+            )}
+
             <ChaptersCarousel 
-              chapters={chapters}
+              chapters={publishedChapters}
               title="Mis capítulos"
               description="Tus historias cortas y capítulos publicados"
               className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+              renderItemFooter={(c) => (
+                <div className="flex items-center justify-center">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={(e) => { e.stopPropagation(); deleteItem('chapters', c.id); }}
+                    disabled={!!deletingIds[`chapters:${c.id}`]}
+                    aria-label="Eliminar capítulo"
+                  >
+                    {deletingIds[`chapters:${c.id}`] ? 'Eliminando…' : 'Eliminar'}
+                  </button>
+                </div>
+              )}
             />
+
+            {/* Se elimina la sección de administración separada para capítulos publicados */}
+
+            {draftChapters.length > 0 && (
+              <ChaptersCarousel 
+                chapters={draftChapters}
+                title="Borradores de capítulos"
+                description="Publica tus capítulos cuando estén listos"
+                className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+                renderItemFooter={(c) => (
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      className="inline-flex items-center gap-2 rounded-md bg-indigo-600 text-white px-3 py-2 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                      onClick={(e) => { e.stopPropagation(); publishItem('chapters', c.id); }}
+                      disabled={!!publishingIds[`chapters:${c.id}`]}
+                      aria-label="Publicar capítulo"
+                    >
+                      {publishingIds[`chapters:${c.id}`] ? 'Publicando…' : 'Publicar'}
+                    </button>
+                    <button
+                      className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                      onClick={(e) => { e.stopPropagation(); deleteItem('chapters', c.id); }}
+                      disabled={!!deletingIds[`chapters:${c.id}`]}
+                      aria-label="Eliminar capítulo"
+                    >
+                      {deletingIds[`chapters:${c.id}`] ? 'Eliminando…' : 'Eliminar'}
+                    </button>
+                  </div>
+                )}
+              />
+            )}
           </div>
         )}
 

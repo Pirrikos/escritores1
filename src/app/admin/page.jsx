@@ -260,14 +260,14 @@ export default function AdminDashboard() {
 
                   {/* Biblioteca */}
                   <button
-                    onClick={() => router.push('/library')}
+                    onClick={() => router.push('/works')}
                     className="flex flex-col items-center p-6 bg-gradient-to-br from-teal-50 to-teal-100 rounded-2xl hover:from-teal-100 hover:to-teal-200 transition-all duration-300 group hover:scale-[1.02] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
                   >
                     <div className="w-10 h-10 bg-teal-600 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
                       <Icon path={Icons.book} size="md" className="text-white" />
                     </div>
                     <span className="font-semibold text-slate-900 group-hover:text-teal-700 transition-colors duration-300">Biblioteca</span>
-                    <span className="text-xs text-slate-600 mt-1">/library</span>
+                    <span className="text-xs text-slate-600 mt-1">/works</span>
                   </button>
 
                   {/* Capítulos */}

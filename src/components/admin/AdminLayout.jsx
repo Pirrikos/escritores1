@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { Icon, Icons, Button, Card, CardBody } from '@/components/ui';
 
@@ -60,6 +61,16 @@ export default function AdminLayout({ children, activeTab = 'dashboard' }) {
                 <div>
                   <h1 className="text-xl font-bold text-slate-900">Página Secundaria</h1>
                 </div>
+                {/* Botón Inicio */}
+                <Link
+                  href="/home"
+                  className="ml-2 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white/80 backdrop-blur px-3 py-2 text-sm text-slate-700 hover:bg-white transition-colors"
+                  aria-label="Volver a inicio"
+                  title="Inicio"
+                >
+                  <Icon path={Icons.dashboard} size="sm" />
+                  <span>Inicio</span>
+                </Link>
               </div>
             </div>
 

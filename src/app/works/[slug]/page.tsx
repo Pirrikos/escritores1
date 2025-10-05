@@ -8,9 +8,12 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import CoverRenderer from '@/components/ui/CoverRenderer';
 import { ViewDownloadButton } from '@/components/ui/ViewDownloadButton';
 import { ToastProvider, useToast } from '@/contexts/ToastContext';
+import ToastContainer from '@/components/ui/ToastContainer';
 import { WorkDetailSkeleton } from '@/components/ui/WorkDetailSkeleton';
 import { generateSlug } from '@/lib/slugUtils';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
+const PDFViewer = dynamic(() => import('@/components/ui/PDFViewer'), { ssr: false });
 
 interface Work {
   id: string;
@@ -37,6 +40,7 @@ export default function WorkDetailPage() {
 
   return (
     <ToastProvider>
+      <ToastContainer />
       <WorkDetailPageContent 
         slug={slug}
         work={work}
@@ -71,6 +75,11 @@ function WorkDetailPageContent({
   supabase: SupabaseClient;
 }) {
   const { addToast } = useToast();
+  // Estado local para capítulos y visor PDF
+  const [chapters, setChapters] = useState<Array<{ id: string; title: string; chapter_number: number; slug?: string; file_url?: string; file_type?: string }>>([]);
+  const [isPDFViewerOpen, setIsPDFViewerOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [currentTitle, setCurrentTitle] = useState<string | null>(null);
   // Declarar la función antes del useEffect para evitar TDZ
   const loadWorkBySlug = useCallback(async (workSlug: string) => {
     try {
@@ -147,6 +156,102 @@ function WorkDetailPageContent({
     }
   }, [slug, loadWorkBySlug]);
 
+  // Cargar capítulos publicados de la obra actual
+  const loadPublishedChaptersForWork = useCallback(async (workId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('chapters')
+        .select('id, title, chapter_number, work_id, slug, status, file_url, file_type, is_independent')
+        .eq('is_independent', false)
+        .eq('work_id', workId)
+        .eq('status', 'published')
+        .order('chapter_number', { ascending: true })
+        .limit(1000);
+      if (error) throw error;
+      const list = Array.isArray(data) ? data.map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        chapter_number: row.chapter_number,
+        slug: row.slug,
+        file_url: row.file_url,
+        file_type: row.file_type,
+      })) : [];
+      setChapters(list);
+    } catch (e) {
+      console.warn('No se pudieron cargar los capítulos de la obra', e);
+      setChapters([]);
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    if (work?.id) {
+      loadPublishedChaptersForWork(work.id);
+    }
+  }, [work?.id, loadPublishedChaptersForWork]);
+
+  // Abrir archivo de capítulo con visor PDF integrado
+  const openChapterFile = useCallback(async (filePath?: string, slug?: string, fileType?: string, title?: string) => {
+    try {
+      // Resolver filePath desde el slug si no viene en el item
+      let effectivePath = filePath;
+      let effectiveType = fileType;
+      let effectiveTitle = title;
+      if (!effectivePath && slug) {
+        try {
+          const { data: ch, error } = await supabase
+            .from('chapters')
+            .select('file_url, file_type, title, status')
+            .eq('slug', slug)
+            .eq('status', 'published')
+            .limit(1)
+            .single();
+          if (!error && ch?.file_url) {
+            effectivePath = ch.file_url;
+            effectiveType = ch.file_type || effectiveType;
+            effectiveTitle = ch.title || effectiveTitle;
+          }
+        } catch (e) {
+          console.warn('No se pudo resolver file_url por slug', e);
+        }
+      }
+      // Si aún no hay archivo, navegar al capítulo pasando ?view=pdf para abrir visor automático
+      if (!effectivePath) {
+        window.location.href = `/chapters/${slug || ''}?view=pdf`;
+        return;
+      }
+
+      // Si es PDF, abrir dentro de la app con visor integrado
+      const isPdf = (effectiveType && effectiveType.toLowerCase().includes('pdf')) || (effectivePath && effectivePath.toLowerCase().endsWith('.pdf'));
+      if (isPdf) {
+        try {
+          const res = await fetch('/api/storage/signed-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: effectivePath, expiresIn: 3600 })
+          });
+          const signed = res.ok ? (await res.json())?.signedUrl : null;
+          const urlToUse = signed || effectivePath;
+          setPdfUrl(urlToUse);
+          setCurrentTitle(effectiveTitle || 'Capítulo');
+          setIsPDFViewerOpen(true);
+          return;
+        } catch (e) {
+          console.warn('No se pudo firmar la URL, se usará la ruta por defecto.', e);
+          setPdfUrl(effectivePath);
+          setCurrentTitle(effectiveTitle || 'Capítulo');
+          setIsPDFViewerOpen(true);
+          return;
+        }
+      }
+
+      // Otros tipos: abrir en nueva pestaña
+      window.open(effectivePath, '_blank');
+    } catch (e) {
+      console.error('Error abriendo capítulo:', e);
+      window.location.href = (filePath || `/chapters/${slug || ''}`);
+    }
+  }, [supabase]);
+
   if (loading) {
     return <WorkDetailSkeleton />;
   }
@@ -163,10 +268,10 @@ function WorkDetailPageContent({
             La obra que buscas no existe o no está disponible públicamente.
           </p>
           <Link
-            href="/library"
+            href="/works"
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Volver a la biblioteca
+            Volver a obras
           </Link>
         </div>
       </div>
@@ -175,12 +280,26 @@ function WorkDetailPageContent({
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Visor PDF para capítulos (se muestra cuando isPDFViewerOpen = true) */}
+      {isPDFViewerOpen && pdfUrl && (
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+          <PDFViewer
+            fileUrl={pdfUrl}
+            fileName={currentTitle || work.title}
+            onClose={() => setIsPDFViewerOpen(false)}
+          />
+        </div>
+      )}
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <nav className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
-            <Link href="/library" className="hover:text-blue-600 dark:hover:text-blue-400">
-              Biblioteca
+            <Link href="/home" className="hover:text-blue-600 dark:hover:text-blue-400">
+              Inicio
+            </Link>
+            <span>/</span>
+            <Link href="/works" className="hover:text-blue-600 dark:hover:text-blue-400">
+              Obras
             </Link>
             <span>/</span>
             <span className="text-gray-900 dark:text-white">{work.title}</span>
@@ -337,20 +456,76 @@ function WorkDetailPageContent({
                       />
                     )}
                     
-                    {/* Botón para ver y descargar la obra completa */}
-                    <ViewDownloadButton
-                      filePath={work.file_url}
-                      fileName={`${work.title} - ${work.profiles.display_name}`}
-                      bucket="works"
-                      size="lg"
-                      className="flex-1"
-                    />
+                    {/* Botón para ver y descargar la obra completa (solo si existe archivo válido); oculto si hay capítulos */}
+                    {chapters.length === 0 && (() => {
+                      const fp = (work.file_url || '').trim();
+                      const hasValidFile = fp !== '' && fp.toLowerCase() !== 'null';
+                      if (!hasValidFile) {
+                        return (
+                          <div className="flex-1 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                            <p className="text-sm text-orange-700 dark:text-orange-300">
+                              Archivo de la obra completa no disponible.
+                            </p>
+                          </div>
+                        );
+                      }
+                      return (
+                        <ViewDownloadButton
+                          filePath={work.file_url}
+                          fileName={`${work.title} - ${work.profiles.display_name}`}
+                          bucket="works"
+                          contentType="work"
+                          contentSlug={slug}
+                          size="lg"
+                          className="flex-1"
+                        />
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Sección de capítulos: visible solo si la obra se publica por capítulos */}
+        {chapters.length > 0 && (
+          <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              Capítulos
+            </h2>
+            <div className="space-y-3">
+              {chapters.map((ch) => (
+                <div key={ch.id} className="flex items-center justify-between p-3 rounded border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                      Capítulo {ch.chapter_number}
+                    </span>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      {ch.title}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                      onClick={() => openChapterFile(ch.file_url, ch.slug, ch.file_type, ch.title)}
+                    >
+                      Ver
+                    </button>
+                    {ch.slug && (
+                      <Link
+                        className="px-3 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        href={`/chapters/${ch.slug}`}
+                      >
+                        Ir al capítulo
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Additional Information */}
         <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -361,8 +536,8 @@ function WorkDetailPageContent({
             <p>
               Esta obra forma parte de la colección de escritores disponible en nuestra plataforma.
               Puedes explorar más obras de este autor y otros escritores en nuestra{' '}
-              <Link href="/library" className="text-blue-600 dark:text-blue-400 hover:underline">
-                biblioteca digital
+              <Link href="/works" className="text-blue-600 dark:text-blue-400 hover:underline">
+                biblioteca de obras
               </Link>.
             </p>
           </div>

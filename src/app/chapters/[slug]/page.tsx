@@ -1,13 +1,17 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import CoverRenderer from '@/components/ui/CoverRenderer';
 import { ViewDownloadButton } from '@/components/ui/ViewDownloadButton';
+import { detectFileType, canViewInBrowser } from '@/lib/fileUtils';
+import dynamic from 'next/dynamic';
+const PDFViewer = dynamic(() => import('@/components/ui/PDFViewer'), { ssr: false });
 import { ToastProvider, useToast } from '@/contexts/ToastContext';
+import ToastContainer from '@/components/ui/ToastContainer';
 import { WorkDetailSkeleton } from '@/components/ui/WorkDetailSkeleton';
 import { generateSlug } from '@/lib/slugUtils';
 import Image from 'next/image';
@@ -40,6 +44,7 @@ export default function ChapterDetailPage() {
 
   return (
     <ToastProvider>
+      <ToastContainer />
       <ChapterDetailPageContent 
         slug={slug}
         chapter={chapter}
@@ -74,6 +79,12 @@ function ChapterDetailPageContent({
   supabase: SupabaseClient;
 }) {
   const { addToast } = useToast();
+  const searchParams = useSearchParams();
+
+  // Estado para visor PDF
+  const [isPDFViewerOpen, setIsPDFViewerOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [currentTitle, setCurrentTitle] = useState<string>('');
 
   const loadChapterBySlug = useCallback(async (chapterSlug: string) => {
     try {
@@ -155,6 +166,30 @@ function ChapterDetailPageContent({
     }
   }, [slug, loadChapterBySlug]);
 
+  // Abrir automáticamente el visor PDF si llega ?view=pdf
+  useEffect(() => {
+    const tryOpenPdf = async () => {
+      if (!chapter) return;
+      const view = searchParams.get('view');
+      const filePath = chapter.file_url || '';
+      const fileType = filePath ? detectFileType(filePath) : 'other';
+      if (view === 'pdf' && filePath && fileType === 'pdf') {
+        try {
+          const { data, error } = await supabase.storage
+            .from('chapters')
+            .createSignedUrl(filePath, 3600);
+          const signedUrl = error ? null : data?.signedUrl;
+          setPdfUrl(signedUrl || filePath);
+          setCurrentTitle(chapter.title);
+          setIsPDFViewerOpen(true);
+        } catch (e) {
+          addToast({ type: 'error', message: 'No se pudo abrir el PDF del capítulo.' });
+        }
+      }
+    };
+    tryOpenPdf();
+  }, [chapter, searchParams, supabase, addToast]);
+
   if (loading) {
     return <WorkDetailSkeleton />;
   }
@@ -183,10 +218,42 @@ function ChapterDetailPageContent({
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Aviso cuando se solicita ver PDF y no hay archivo o no es compatible */}
+      {(() => {
+        const wantsPdf = searchParams.get('view') === 'pdf';
+        const fp = chapter?.file_url || '';
+        const ft = fp ? detectFileType(fp) : 'other';
+        const isPdf = ft === 'pdf';
+        if (wantsPdf && (!fp || !isPdf)) {
+          return (
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+              <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200 p-3 text-sm">
+                {(!fp) ? (
+                  <span>Este capítulo no tiene un archivo disponible para ver en el visor PDF.</span>
+                ) : (
+                  <span>El archivo de este capítulo no es PDF, por eso se muestra la ficha.</span>
+                )}
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
+      {isPDFViewerOpen && pdfUrl && (
+        <PDFViewer
+          fileUrl={pdfUrl}
+          fileName={currentTitle || 'Capítulo'}
+          onClose={() => setIsPDFViewerOpen(false)}
+        />
+      )}
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <nav className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <Link href="/home" className="hover:text-blue-600 dark:hover:text-blue-400">
+              Inicio
+            </Link>
+            <span>/</span>
             <Link href="/chapters" className="hover:text-blue-600 dark:hover:text-blue-400">
               Capítulos
             </Link>
@@ -355,6 +422,8 @@ function ChapterDetailPageContent({
                       filePath={chapter.file_url}
                       fileName={`${chapter.title} - ${chapter.profiles.display_name}`}
                       bucket="chapters"
+                      contentType="chapter"
+                      contentSlug={slug}
                       size="lg"
                       className="flex-1"
                     />

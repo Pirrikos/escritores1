@@ -27,6 +27,9 @@ interface ChaptersCarouselProps {
   description?: string;
   showStats?: boolean;
   className?: string;
+  seeMoreHref?: string;
+  seeMoreLabel?: string;
+  renderItemFooter?: (chapter: Chapter) => React.ReactNode;
 }
 
 export default function ChaptersCarousel({ 
@@ -34,7 +37,10 @@ export default function ChaptersCarousel({
   title = "Capítulos Independientes", 
   description = "Historias cortas y capítulos independientes",
   showStats = false,
-  className = ""
+  className = "",
+  seeMoreHref,
+  seeMoreLabel = "Ver más...",
+  renderItemFooter
 }: ChaptersCarouselProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -85,7 +91,15 @@ export default function ChaptersCarousel({
               <p className="text-gray-600 dark:text-gray-400">{description}</p>
             )}
           </div>
-          <div className="flex space-x-2">
+          <div className="flex items-center space-x-3">
+            {seeMoreHref && (
+              <Link
+                href={seeMoreHref}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {seeMoreLabel}
+              </Link>
+            )}
             <button
               onClick={scrollLeft}
               className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
@@ -111,12 +125,12 @@ export default function ChaptersCarousel({
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {chapters.map((chapter) => (
-          <Link
-            key={chapter.id}
-            href={`/chapters/${chapter.slug || generateSlug(chapter.title)}`}
-            className="flex-shrink-0 group cursor-pointer"
-          >
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 p-4 w-64">
+          <div key={chapter.id} className="flex-shrink-0 w-64">
+            <Link
+              href={`/chapters/${chapter.slug || generateSlug(chapter.title)}`}
+              className="group cursor-pointer block"
+            >
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 p-4">
               {/* Cover */}
               <div className="mb-4 flex justify-center">
                 <div className="transform group-hover:scale-105 transition-transform duration-300">
@@ -192,8 +206,16 @@ export default function ChaptersCarousel({
                   {formatDate(chapter.created_at)}
                 </div>
               </div>
-            </div>
-          </Link>
+              {/* Cierre del contenedor de tarjeta */}
+              </div>
+            </Link>
+
+            {renderItemFooter && (
+              <div className="mt-2">
+                {renderItemFooter(chapter)}
+              </div>
+            )}
+          </div>
         ))}
       </div>
 

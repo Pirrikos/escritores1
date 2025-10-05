@@ -1,0 +1,53 @@
+-- Migration: RLS policies for Supabase Storage bucket "works"
+-- Created: 2025-02-03
+-- Purpose: Allow authenticated users to manage their own objects in the private 'works' bucket
+
+-- Enable RLS on storage.objects (safe if already enabled)
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+-- Drop previous works policies if they exist (idempotent)
+DROP POLICY IF EXISTS "works_upload_policy_2025" ON storage.objects;
+DROP POLICY IF EXISTS "works_select_policy_2025" ON storage.objects;
+DROP POLICY IF EXISTS "works_update_policy_2025" ON storage.objects;
+DROP POLICY IF EXISTS "works_delete_policy_2025" ON storage.objects;
+
+-- Upload (INSERT): only allow uploading into own folder inside 'works'
+CREATE POLICY "works_upload_policy_2025"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'works' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Read (SELECT): only allow reading objects in own folder inside 'works'
+CREATE POLICY "works_select_policy_2025"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'works' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Update (UPDATE): only allow updating objects in own folder inside 'works'
+CREATE POLICY "works_update_policy_2025"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (
+  bucket_id = 'works' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Delete (DELETE): only allow deleting objects in own folder inside 'works'
+CREATE POLICY "works_delete_policy_2025"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'works' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Notes:
+-- - Upload form for works already prefixes paths with session.user.id (first folder), e.g. "<userId>/obra-...pdf"
+-- - Bucket 'works' must be private and objects organized under the user's UUID
+-- - To apply manually, paste this migration into Supabase SQL editor and run

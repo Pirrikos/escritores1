@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "../../lib/supabaseClient";
 import { sanitizeText, normalizeText } from '@/lib/sanitization';
 import { validatePost, validateUserInput, VALIDATION_LIMITS, VALIDATION_ERRORS } from '@/lib/databaseValidation';
-import { Button, Input, Textarea, Select, Card, CardHeader, CardBody } from "@/components/ui";
+import { Button, Input, Textarea, Select, Card, CardHeader, CardBody, AppHeader } from "@/components/ui";
 
 export default function WritePage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -444,11 +444,8 @@ export default function WritePage() {
 
   return (
     <main className="max-w-3xl mx-auto p-4 space-y-3">
+      <AppHeader className="mb-6" />
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 m-0">Escribir</h1>
-
-      <p className="text-xs text-gray-500 dark:text-gray-400">
-        Sesión: {session ? `OK (${session.user?.email})` : "NO"}
-      </p>
 
       {!session ? (
         <Card>
@@ -461,15 +458,6 @@ export default function WritePage() {
         </Card>
       ) : (
         <>
-          <Card variant="outlined">
-            <CardBody>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-green-600 font-medium">Conectado</span>
-                <Button variant="outline" size="sm" onClick={signOut}>Salir</Button>
-              </div>
-            </CardBody>
-          </Card>
-
           <Card>
             <CardHeader title="Crear nuevo post" />
             <CardBody>

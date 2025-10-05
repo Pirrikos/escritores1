@@ -140,6 +140,21 @@ export default function ChaptersPage() {
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Botón Inicio */}
+          <div className="mb-4">
+            <Link
+              href="/home"
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white/80 backdrop-blur px-3 py-2 text-sm text-gray-700 hover:bg-white transition-colors"
+              aria-label="Volver a inicio"
+              title="Inicio"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                <path d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z" />
+              </svg>
+              <span>Inicio</span>
+            </Link>
+          </div>
           <div className="text-center">
             <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
               Biblioteca de Capítulos

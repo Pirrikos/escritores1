@@ -25,6 +25,10 @@ interface WorksCarouselProps {
   description?: string;
   showStats?: boolean;
   className?: string;
+  seeMoreHref?: string;
+  seeMoreLabel?: string;
+  // Renderiza contenido debajo de cada tarjeta (por ejemplo, acciones como eliminar)
+  renderItemFooter?: (work: Work) => React.ReactNode;
 }
 
 export default function WorksCarousel({ 
@@ -32,9 +36,13 @@ export default function WorksCarousel({
   title = "Obras Completas", 
   description = "Libros y obras completas de nuestros autores",
   showStats = false,
-  className = ""
+  className = "",
+  seeMoreHref,
+  seeMoreLabel = "Ver más...",
+  renderItemFooter
 }: WorksCarouselProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isEmpty = works.length === 0;
 
   const scrollLeft = () => {
     if (scrollContainerRef.current) {
@@ -62,15 +70,7 @@ export default function WorksCarousel({
     });
   };
 
-  if (works.length === 0) {
-    return (
-      <div className={`text-center py-12 ${className}`}>
-        <p className="text-gray-500 dark:text-gray-400 text-lg">
-          No hay obras disponibles en este momento.
-        </p>
-      </div>
-    );
-  }
+  // No retornamos temprano en vacío: queremos mantener el encabezado visible
 
   return (
     <div className={className}>
@@ -83,7 +83,15 @@ export default function WorksCarousel({
               <p className="text-gray-600 dark:text-gray-400">{description}</p>
             )}
           </div>
-          <div className="flex space-x-2">
+          <div className="flex items-center space-x-3">
+            {seeMoreHref && (
+              <Link
+                href={seeMoreHref}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {seeMoreLabel}
+              </Link>
+            )}
             <button
               onClick={scrollLeft}
               className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
@@ -102,99 +110,112 @@ export default function WorksCarousel({
         </div>
       )}
 
-      {/* Carousel Container */}
-      <div
-        ref={scrollContainerRef}
-        className="flex gap-6 overflow-x-auto scrollbar-hide pb-4"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-      >
-        {works.map((work) => (
-          <Link
-            key={work.id}
-            href={`/works/${generateSlug(work.title)}`}
-            className="flex-shrink-0 group cursor-pointer"
-          >
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 p-4 w-64">
-              {/* Cover */}
-              <div className="mb-4 flex justify-center">
-                <div className="transform group-hover:scale-105 transition-transform duration-300">
-                  {work.cover_url ? (
-                    work.cover_url.startsWith('preview:') ? (
-                      // Renderizar portada desde configuración de preview
-                      (() => {
-                        const parts = work.cover_url.split(':');
-                        const templateId = parts[1];
-                        const paletteId = parts[2];
-                        const encodedTitle = parts[3];
-                        const encodedAuthor = parts[4];
-                        const validTemplateIds = ['template-1','template-2','template-3','template-4','template-5','template-6','template-7','template-8'] as const;
-                        const validPaletteIds = ['marino','rojo','negro','verde','purpura'] as const;
-                        const safeTemplateId = (validTemplateIds as readonly string[]).includes(templateId) ? (templateId as typeof validTemplateIds[number]) : 'template-1';
-                        const safePaletteId = (validPaletteIds as readonly string[]).includes(paletteId) ? (paletteId as typeof validPaletteIds[number]) : 'marino';
-                        
-                        return (
-                          <CoverRenderer
-                            mode="template"
-                            templateId={safeTemplateId}
-                            title={decodeURIComponent(encodedTitle || work.title)}
-                            author={decodeURIComponent(encodedAuthor || work.profiles?.display_name || 'Autor')}
-                            paletteId={safePaletteId}
-                            width={180}
-                            height={270}
-                            className="shadow-md rounded-sm"
-                          />
-                        );
-                      })()
-                    ) : (
-                      // Portada personalizada subida
-                      <div className="w-[180px] h-[270px] bg-gray-200 rounded overflow-hidden shadow-md">
-                        <Image
-                          src={work.cover_url}
-                          alt={`Portada de ${work.title}`}
+      {/* Carousel Container or Empty State */}
+      {isEmpty ? (
+        <div className="text-center py-12">
+          <p className="text-gray-500 dark:text-gray-400 text-lg">
+            No hay nada publicado en esta categoría.
+          </p>
+        </div>
+      ) : (
+        <div
+          ref={scrollContainerRef}
+          className="flex gap-6 overflow-x-auto scrollbar-hide pb-4"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {works.map((work) => (
+            <div key={work.id} className="flex-shrink-0 w-64">
+              <Link
+                href={`/works/${generateSlug(work.title)}`}
+                className="group cursor-pointer block"
+              >
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 p-4">
+                  {/* Cover */}
+                  <div className="mb-4 flex justify-center">
+                    <div className="transform group-hover:scale-105 transition-transform duration-300">
+                      {work.cover_url ? (
+                        work.cover_url.startsWith('preview:') ? (
+                          (() => {
+                            const parts = work.cover_url.split(':');
+                            const templateId = parts[1];
+                            const paletteId = parts[2];
+                            const encodedTitle = parts[3];
+                            const encodedAuthor = parts[4];
+                            const validTemplateIds = ['template-1','template-2','template-3','template-4','template-5','template-6','template-7','template-8'] as const;
+                            const validPaletteIds = ['marino','rojo','negro','verde','purpura'] as const;
+                            const safeTemplateId = (validTemplateIds as readonly string[]).includes(templateId) ? (templateId as typeof validTemplateIds[number]) : 'template-1';
+                            const safePaletteId = (validPaletteIds as readonly string[]).includes(paletteId) ? (paletteId as typeof validPaletteIds[number]) : 'marino';
+                            
+                            return (
+                              <CoverRenderer
+                                mode="template"
+                                templateId={safeTemplateId}
+                                title={decodeURIComponent(encodedTitle || work.title)}
+                                author={decodeURIComponent(encodedAuthor || work.profiles?.display_name || 'Autor')}
+                                paletteId={safePaletteId}
+                                width={180}
+                                height={270}
+                                className="shadow-md rounded-sm"
+                              />
+                            );
+                          })()
+                        ) : (
+                          <div className="w-[180px] h-[270px] bg-gray-200 rounded overflow-hidden shadow-md">
+                            <Image
+                              src={work.cover_url}
+                              alt={`Portada de ${work.title}`}
+                              width={180}
+                              height={270}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )
+                      ) : (
+                        <CoverRenderer
+                          mode="auto"
+                          title={work.title}
+                          author={work.profiles?.display_name || 'Autor Desconocido'}
+                          paletteId="marino"
                           width={180}
                           height={270}
-                          className="w-full h-full object-cover"
+                          className="shadow-md rounded-sm"
                         />
-                      </div>
-                    )
-                  ) : (
-                    <CoverRenderer
-                      mode="auto"
-                      title={work.title}
-                      author={work.profiles?.display_name || 'Autor Desconocido'}
-                      paletteId="marino"
-                      width={180}
-                      height={270}
-                      className="shadow-md rounded-sm"
-                    />
-                  )}
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Work Info */}
+                  <div className="text-center">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      {work.title}
+                    </h3>
+                    
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      por {work.profiles?.display_name || 'Autor Desconocido'}
+                    </p>
+
+                    {work.synopsis && (
+                      <p className="text-xs text-gray-500 dark:text-gray-500 line-clamp-3 mb-2">
+                        {work.synopsis}
+                      </p>
+                    )}
+
+                    <div className="text-xs text-gray-400 dark:text-gray-500">
+                      {formatDate(work.created_at)}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </Link>
 
-              {/* Work Info */}
-              <div className="text-center">
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  {work.title}
-                </h3>
-                
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  por {work.profiles?.display_name || 'Autor Desconocido'}
-                </p>
-
-                {work.synopsis && (
-                  <p className="text-xs text-gray-500 dark:text-gray-500 line-clamp-3 mb-2">
-                    {work.synopsis}
-                  </p>
-                )}
-
-                <div className="text-xs text-gray-400 dark:text-gray-500">
-                  {formatDate(work.created_at)}
+              {renderItemFooter && (
+                <div className="mt-2">
+                  {renderItemFooter(work)}
                 </div>
-              </div>
+              )}
             </div>
-          </Link>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Stats Section */}
       {showStats && (

@@ -46,6 +46,9 @@ export interface ViewDownloadButtonProps {
   className?: string;
   /** Deshabilitado */
   disabled?: boolean;
+  /** Contexto del contenido (para logging de vistas) */
+  contentType?: 'work' | 'chapter';
+  contentSlug?: string;
 }
 
 export function ViewDownloadButton({
@@ -63,13 +66,16 @@ export function ViewDownloadButton({
   onView,
   onDownload,
   className = '',
-  disabled = false
+  disabled = false,
+  contentType,
+  contentSlug
 }: ViewDownloadButtonProps) {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isPDFViewerOpen, setIsPDFViewerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [actualFileUrl, setActualFileUrl] = useState<string | null>(fileUrl || null);
   const [fileExists, setFileExists] = useState<boolean>(true); // Controla si el archivo existe
+  const [initialPage, setInitialPage] = useState<number | undefined>(undefined);
   const { addToast } = useToast();
 
   // Generar URL firmada si se proporciona filePath (solo para rutas de bucket, no URLs externas)
@@ -104,10 +110,16 @@ export function ViewDownloadButton({
         const signedUrl = await getSignedFileUrl(filePath, 3600, bucket);
         setActualFileUrl(signedUrl);
         setFileExists(true);
-      } catch {
+      } catch (err) {
         // Asumir que el archivo existe y manejar errores en tiempo de ejecución
         // Esto evita mostrar "Archivo no disponible" cuando el archivo sí existe
         setFileExists(true);
+        const msg = (err instanceof Error ? err.message : 'Error generando URL firmada');
+        const low = msg.toLowerCase();
+        // Mostrar toast solo para errores relevantes (404/no encontrado)
+        if (low.includes('no encontrado') || low.includes('404')) {
+          addToast({ type: 'error', message: msg });
+        }
       } finally {
         setIsLoading(false);
       }
@@ -230,10 +242,98 @@ export function ViewDownloadButton({
       return;
     }
     
+    // Registrar evento de vista para PDFs
     if (detectedFileType === 'pdf') {
+      try {
+        if (contentType && contentSlug) {
+          const res = await fetch('/api/activity/view-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              contentType,
+              contentSlug,
+              bucket,
+              filePath: (() => {
+                // Normalizar filePath: si es una URL firmada, extraer ruta de storage
+                if (filePath && (filePath.startsWith('http://') || filePath.startsWith('https://'))) {
+                  try {
+                    const u = new URL(filePath);
+                    const parts = u.pathname.split('/');
+                    const signIdx = parts.findIndex(p => p === 'sign');
+                    if (signIdx >= 0 && parts.length > signIdx + 2) {
+                      const bkt = parts[signIdx + 1];
+                      const rest = parts.slice(signIdx + 2).join('/');
+                      return `${bkt}/${rest}`; // chapters/<ruta>
+                    }
+                  } catch {}
+                }
+                return filePath || null;
+              })(),
+            }),
+          });
+          let payload: any = null;
+          try { payload = await res.json(); } catch {}
+          if (res.ok && payload?.success) {
+            addToast({ type: 'success', message: 'Lectura registrada' });
+          } else {
+            const err = payload?.error || 'unknown_error';
+            // Debug en consola para diagnóstico rápido
+            console.debug('view-pdf response', { status: res.status, payload });
+            if (res.status === 429) {
+              addToast({ type: 'warning', message: 'Has realizado demasiadas solicitudes. Intenta nuevamente en unos minutos.' });
+            } else if (err === 'unauthorized') {
+              addToast({ type: 'warning', message: 'Debes iniciar sesión para registrar lecturas.' });
+            } else if (err === 'insert_failed') {
+              if (payload?.details) {
+                console.warn('insert_failed details', payload.details);
+              }
+              addToast({ type: 'info', message: 'No se pudo registrar la lectura. Intentaremos mostrarla cuando sea posible.' });
+            } else if (err === 'invalid_content_type') {
+              addToast({ type: 'warning', message: 'Tipo de contenido inválido al registrar lectura.' });
+            } else if (err === 'invalid_slug') {
+              addToast({ type: 'warning', message: 'Slug inválido al registrar lectura.' });
+            } else if (err === 'invalid_payload') {
+              addToast({ type: 'warning', message: 'Datos inválidos al registrar lectura.' });
+            } else if (err === 'server_error') {
+              addToast({ type: 'error', message: 'Error del servidor al registrar lectura.' });
+            } else {
+              addToast({ type: 'error', message: 'Error registrando la lectura.' });
+            }
+          }
+        }
+      } catch (logErr) {
+        console.warn('Fallo registrando vista de PDF:', logErr);
+        addToast({ type: 'error', message: 'Error registrando la lectura.' });
+      }
+
       // Asegurar que tenemos la URL antes de abrir el visor
       if (!actualFileUrl && urlToUse) {
         setActualFileUrl(urlToUse);
+      }
+      // Intentar cargar la última página leída para reanudar
+      try {
+        const { createClientComponentClient } = await import('@supabase/auth-helpers-nextjs');
+        const supabase = createClientComponentClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && contentType && contentSlug) {
+          const { data: rp, error: rpError } = await supabase
+            .from('reading_progress')
+            .select('last_page, num_pages')
+            .eq('user_id', user.id)
+            .eq('content_type', contentType)
+            .eq('content_slug', contentSlug)
+            .limit(1)
+            .maybeSingle();
+          if (!rpError && rp && typeof rp.last_page === 'number') {
+            setInitialPage(rp.last_page);
+          } else {
+            setInitialPage(undefined);
+          }
+        }
+      } catch (e) {
+        // No impedir la apertura del visor si falla la consulta
+        setInitialPage(undefined);
       }
       setIsPDFViewerOpen(true);
     } else if (detectedFileType === 'image' || detectedFileType === 'text') {
@@ -493,6 +593,44 @@ export function ViewDownloadButton({
             fileUrl={actualFileUrl || filePath || ''}
             fileName={getFileName()}
             onClose={() => setIsPDFViewerOpen(false)}
+            initialPage={initialPage}
+            onProgress={async (page, totalPages) => {
+              try {
+                // Normalizar filePath para registro estable
+                const normalizedPath = (() => {
+                  const src = actualFileUrl || filePath || '';
+                  if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
+                    try {
+                      const u = new URL(src);
+                      const parts = u.pathname.split('/');
+                      const signIdx = parts.findIndex(p => p === 'sign');
+                      if (signIdx >= 0 && parts.length > signIdx + 2) {
+                        const bkt = parts[signIdx + 1];
+                        const rest = parts.slice(signIdx + 2).join('/');
+                        return `${bkt}/${rest}`;
+                      }
+                    } catch {}
+                  }
+                  return src;
+                })();
+
+                await fetch('/api/activity/reading-progress', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({
+                    contentType,
+                    contentSlug,
+                    bucket,
+                    filePath: normalizedPath,
+                    lastPage: page,
+                    numPages: totalPages,
+                  }),
+                });
+              } catch (e) {
+                // no-op, no bloquear UI por errores de progreso
+              }
+            }}
           />
         )}
       </>

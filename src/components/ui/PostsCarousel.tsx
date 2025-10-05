@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
+import Link from 'next/link';
 import { Icon, Icons } from '@/components/ui';
 import LikeButton from '@/components/ui/LikeButton';
 
@@ -24,6 +25,9 @@ interface PostsCarouselProps {
   description?: string;
   showStats?: boolean;
   className?: string;
+  seeMoreHref?: string;
+  seeMoreLabel?: string;
+  renderItemFooter?: (post: Post) => React.ReactNode;
 }
 
 export default function PostsCarousel({ 
@@ -31,7 +35,10 @@ export default function PostsCarousel({
   title = "Posts Recientes", 
   description = "Últimas publicaciones de nuestros escritores",
   showStats = false,
-  className = ""
+  className = "",
+  seeMoreHref,
+  seeMoreLabel = "Ver más...",
+  renderItemFooter
 }: PostsCarouselProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -108,7 +115,15 @@ export default function PostsCarousel({
               <p className="text-gray-600 dark:text-gray-400">{description}</p>
             )}
           </div>
-          <div className="flex space-x-2">
+          <div className="flex items-center space-x-3">
+            {seeMoreHref && (
+              <Link
+                href={seeMoreHref}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {seeMoreLabel}
+              </Link>
+            )}
             <button
               onClick={scrollLeft}
               className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
@@ -134,70 +149,76 @@ export default function PostsCarousel({
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {posts.map((post) => (
-          <article 
-            key={post.id} 
-            className="flex-shrink-0 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 p-6 group cursor-pointer"
-          >
-            {/* Post Content */}
-            <div className="space-y-3">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                {post.title}
-              </h3>
-              
-              {post.content && (
-                <p className="text-gray-700 dark:text-gray-300 text-sm line-clamp-4 leading-relaxed">
-                  {post.content.length > 150 ? post.content.substring(0, 150) + '...' : post.content}
-                </p>
-              )}
+          <div key={post.id} className="flex-shrink-0 w-80">
+            <article 
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 p-6 group cursor-pointer"
+            >
+              {/* Post Content */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  {post.title}
+                </h3>
+                
+                {post.content && (
+                  <p className="text-gray-700 dark:text-gray-300 text-sm line-clamp-4 leading-relaxed">
+                    {post.content.length > 150 ? post.content.substring(0, 150) + '...' : post.content}
+                  </p>
+                )}
 
-              {/* Post Meta */}
-              <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
-                {/* Izquierda: columna de avatar + corazón, y a la derecha el nombre (sin saltos) */}
-                <div className="flex items-start space-x-3 min-w-0">
-                  <div className="flex flex-col items-center gap-2">
-                    {post.profiles?.avatar_url ? (
-                      <img
-                        src={post.profiles.avatar_url.includes('googleusercontent.com')
-                          ? `/api/avatar?u=${encodeURIComponent(post.profiles.avatar_url)}`
-                          : post.profiles.avatar_url}
-                        alt={getAuthorName(post)}
-                        className="w-8 h-8 rounded-full object-cover"
-                        onError={(e) => {
-                          // Fallback: mostrar inicial si la imagen falla
-                          const el = e.currentTarget as HTMLImageElement;
-                          el.style.display = 'none';
-                          const next = el.nextElementSibling as HTMLElement | null;
-                          if (next) next.style.display = 'flex';
-                        }}
+                {/* Post Meta */}
+                <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
+                  {/* Izquierda: columna de avatar + corazón, y a la derecha el nombre (sin saltos) */}
+                  <div className="flex items-start space-x-3 min-w-0">
+                    <div className="flex flex-col items-center gap-2">
+                      {post.profiles?.avatar_url ? (
+                        <img
+                          src={post.profiles.avatar_url.includes('googleusercontent.com')
+                            ? `/api/avatar?u=${encodeURIComponent(post.profiles.avatar_url)}`
+                            : post.profiles.avatar_url}
+                          alt={getAuthorName(post)}
+                          className="w-8 h-8 rounded-full object-cover"
+                          onError={(e) => {
+                            const el = e.currentTarget as HTMLImageElement;
+                            el.style.display = 'none';
+                            const next = el.nextElementSibling as HTMLElement | null;
+                            if (next) next.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        style={{ display: post.profiles?.avatar_url ? 'none' as const : 'flex' as const }}
+                        className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full items-center justify-center"
+                      >
+                        <span className="text-white text-xs font-semibold">
+                          {getAuthorName(post).charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      {/* Corazón debajo del avatar */}
+                      <LikeButton 
+                        targetType="post"
+                        targetId={post.id}
+                        className="text-sm"
                       />
-                    ) : null}
-                    <div
-                      style={{ display: post.profiles?.avatar_url ? 'none' as const : 'flex' as const }}
-                      className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full items-center justify-center"
-                    >
-                      <span className="text-white text-xs font-semibold">
-                        {getAuthorName(post).charAt(0).toUpperCase()}
-                      </span>
                     </div>
-                    {/* Corazón debajo del avatar */}
-                    <LikeButton 
-                      targetType="post"
-                      targetId={post.id}
-                      className="text-sm"
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0 pr-2">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                      {getAuthorName(post)}
-                    </p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                      {formatDate(getPostDate(post))}
-                    </p>
+                    <div className="flex-1 min-w-0 pr-2">
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                        {getAuthorName(post)}
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        {formatDate(getPostDate(post))}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </article>
+            </article>
+
+            {renderItemFooter && (
+              <div className="mt-2">
+                {renderItemFooter(post)}
+              </div>
+            )}
+          </div>
         ))}
       </div>
 

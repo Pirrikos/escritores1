@@ -3,11 +3,19 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 
-// Configurar el worker de PDF.js usando el método recomendado
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
+// Configurar el worker de PDF.js solo en cliente para evitar errores en SSR
+// Se aplica en un efecto para que no se ejecute en el entorno del servidor
+const configurePdfWorker = () => {
+  try {
+    // Evitar reconfiguraciones innecesarias
+    if (pdfjs?.GlobalWorkerOptions?.workerSrc) return;
+    const worker = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+    pdfjs.GlobalWorkerOptions.workerSrc = worker;
+  } catch (e) {
+    // Si falla la resolución por URL (entorno no compatible), no romper la app
+    try { console.warn('[PDFViewer] No se pudo configurar workerSrc', e); } catch {}
+  }
+};
 
 // Importar estilos
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -17,10 +25,19 @@ interface PDFViewerProps {
   fileUrl: string;
   fileName?: string;
   onClose: () => void;
+  initialPage?: number;
+  onProgress?: (page: number, numPages: number) => void;
 }
 
 // Memoizar el componente para evitar re-renders innecesarios
-const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: PDFViewerProps) {
+const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose, initialPage, onProgress }: PDFViewerProps) {
+  // Configurar worker de PDF.js en cliente
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      configurePdfWorker();
+    }
+  }, []);
+
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
@@ -36,11 +53,11 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
   // Ref para el flag de carga en progreso
   const loadingInProgressRef = useRef<boolean>(false);
   
-  // Ref para almacenar el ArrayBuffer del PDF
-  const pdfDataRef = useRef<ArrayBuffer | null>(null);
+  // Estado para almacenar el ArrayBuffer del PDF (evita objetos "detached" y re-renders innecesarios)
+  const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
 
-  // Construir el objeto file a partir del ref; no usar useMemo con refs mutables
-  const fileObject = pdfDataRef.current ? { data: pdfDataRef.current } : null;
+  // Memoizar el objeto file para mantener igualdad referencial cuando no cambia
+  const fileObject = useMemo(() => (pdfData ? { data: pdfData } : null), [pdfData]);
 
   // Memoize the options object to prevent unnecessary reloads
   const documentOptions = useMemo(() => ({
@@ -51,7 +68,27 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
     setNumPages(numPages);
     setLoading(false);
     setError(null);
-  }, []);
+    // Set initial page when document loads if provided and valid
+    if (typeof initialPage === 'number' && Number.isFinite(initialPage)) {
+      const ip = Math.max(1, Math.min(numPages, initialPage));
+      setPageNumber(ip);
+      try { console.info('[PDFViewer] onLoadSuccess -> applying initialPage', { ip, numPages, fileUrl }); } catch {}
+      // Reaplicar una vez tras un pequeño retraso para evitar carreras internas
+      window.setTimeout(() => {
+        setPageNumber(prev => Math.max(1, Math.min(numPages, ip)));
+        try { console.info('[PDFViewer] delayed reapply -> pageNumber', { ip, numPages, fileUrl }); } catch {}
+      }, 100);
+    }
+  }, [initialPage]);
+
+  // Apply initial page if it arrives after the document loaded
+  useEffect(() => {
+    if (numPages > 0 && typeof initialPage === 'number' && Number.isFinite(initialPage)) {
+      const ip = Math.max(1, Math.min(numPages, initialPage));
+      setPageNumber(ip);
+      try { console.info('[PDFViewer] effect apply -> initialPage after load', { ip, numPages, fileUrl }); } catch {}
+    }
+  }, [initialPage, numPages]);
 
   const onDocumentLoadError = useCallback((error: Error) => {
     setError(`Error al cargar el PDF: ${error.message || error}`);
@@ -61,7 +98,7 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
   // Cargar PDF como ArrayBuffer en lugar de usar URL directa
   useEffect(() => {
     // Evitar peticiones duplicadas para la misma URL
-    if (lastUrlRef.current === fileUrl && pdfDataRef.current) {
+    if (lastUrlRef.current === fileUrl && pdfData) {
       return;
     }
     
@@ -98,8 +135,8 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
         })
         .then(arrayBuffer => {
           if (!abortController.signal.aborted && arrayBuffer) {
-            pdfDataRef.current = arrayBuffer;
-            setLoading(false);
+            setPdfData(arrayBuffer);
+            // Mantener loading hasta que el documento PDF se procese (onLoadSuccess)
             setError(null);
           }
         })
@@ -122,6 +159,29 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
       loadingInProgressRef.current = false;
     };
   }, [fileUrl]);
+
+  // Emit progress updates (debounced) when page changes
+  const progressTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!onProgress || numPages <= 0) return;
+    // Debounce to avoid spamming during rapid navigation
+    if (progressTimerRef.current) {
+      window.clearTimeout(progressTimerRef.current);
+    }
+    progressTimerRef.current = window.setTimeout(() => {
+      try {
+        onProgress(pageNumber, numPages);
+      } catch (e) {
+        // no-op
+      }
+    }, 400);
+    return () => {
+      if (progressTimerRef.current) {
+        window.clearTimeout(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+    };
+  }, [pageNumber, numPages, onProgress]);
 
   const goToPrevPage = useCallback(() => {
     setPageNumber(prev => Math.max(1, prev - 1));
@@ -242,9 +302,10 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
             </div>
           )}
 
-          {!loading && fileObject && (
+          {fileObject && (
              <div className="flex justify-center">
                <Document
+                key={fileUrl}
                  file={fileObject}
                 onLoadSuccess={onDocumentLoadSuccess}
                 onLoadError={onDocumentLoadError}
@@ -263,6 +324,7 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose }: 
                 options={documentOptions}
               >
                 <Page
+                  key={pageNumber}
                   pageNumber={pageNumber}
                   scale={scale}
                   loading={

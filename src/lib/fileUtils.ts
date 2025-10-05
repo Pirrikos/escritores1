@@ -67,15 +67,28 @@ export async function getSignedFileUrl(
     });
 
     if (!response.ok) {
-      let error;
+      let body: any = null;
       try {
-        error = await response.json();
+        body = await response.json();
       } catch (parseError) {
-        console.error('❌ getSignedFileUrl - Error parseando respuesta del servidor:', parseError);
+        // Intentar leer como texto para tener contexto
+        try {
+          const text = await response.text();
+          console.error('❌ getSignedFileUrl - Respuesta no JSON del servidor:', { status: response.status, statusText: response.statusText, text });
+        } catch {}
         throw new Error(`Error del servidor (${response.status}): ${response.statusText}`);
       }
-      console.error('❌ getSignedFileUrl - Error del servidor:', error);
-      throw new Error(error.error || error.details || 'Error generando URL firmada');
+
+      const message = (
+        body?.error?.message ||
+        body?.message ||
+        (typeof body?.error === 'string' ? body.error : null) ||
+        response.statusText ||
+        'Error generando URL firmada'
+      );
+      const details = body?.error?.details || body?.details || null;
+      console.error('❌ getSignedFileUrl - Error del servidor:', { status: response.status, message, details });
+      throw new Error(message);
     }
 
     const data: SignedUrlResponse = await response.json();

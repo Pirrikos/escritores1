@@ -3,39 +3,42 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { ensureAdmin } from '@/lib/adminAuth.server.js';
+import { createServerSupabaseClient } from '@/lib/supabaseServer.js';
 import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler.js';
 
 export async function POST(request) {
   return withErrorHandling(async (req) => {
-    // Verificación de administrador (RLS-safe) ANTES de leer cuerpo
-    const admin = await ensureAdmin(req);
-    if (!admin.ok) {
-      if (admin.code === 'UNAUTHORIZED') {
-        return handleAuthError(admin.error || new Error('No autenticado'), {
-          endpoint: '/api/storage/signed-url',
-          method: 'POST'
-        });
-      }
-      return createErrorResponse(
-        ERROR_CODES.FORBIDDEN,
-        'Acceso denegado',
-        { requiredRole: 'admin', userRole: admin.profile?.role }
-      );
-    }
+    // Intentar obtener sesión de usuario (no requiere rol admin). Si no hay usuario, se permite continuar
+    // siempre que el archivo pertenezca a contenido publicado.
+    const supabaseRoute = await createServerSupabaseClient();
+    const { data: { user }, error: authErr } = await supabaseRoute.auth.getUser();
+    const isAuthenticated = !authErr && !!user;
 
     // Leer cuerpo solo para usuarios autorizados
     const { filePath, expiresIn = 3600, bucket } = await req.json();
     
     if (!filePath) {
-      return NextResponse.json(
-        { error: 'filePath es requerido' },
-        { status: 400 }
+      return createErrorResponse(
+        ERROR_CODES.MISSING_REQUIRED_FIELD,
+        'filePath es requerido',
+        { field: 'filePath' }
       );
     }
 
     // Aumentar duración mínima a 1 hora (3600 segundos)
     const finalExpiresIn = Math.max(expiresIn, 3600);
+
+    // Utilidad: extraer bucket y ruta desde una URL completa de Supabase Storage
+    const extractFromStorageUrl = (input) => {
+      try {
+        const url = new URL(input);
+        const m = url.pathname.match(/\/storage\/v1\/object\/(?:public|sign)\/([^\/]+)\/(.+)/);
+        if (m && m[1] && m[2]) {
+          return { bucket: m[1], path: m[2] };
+        }
+      } catch {}
+      return null;
+    };
 
     // Determinar el bucket correcto
     let bucketName = bucket;
@@ -94,6 +97,43 @@ export async function POST(request) {
       }
     }
 
+    // Validar publicación si no está autenticado
+    if (!isAuthenticated) {
+      try {
+        const supabaseForQuery = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.SUPABASE_SERVICE_ROLE_KEY,
+          { auth: { autoRefreshToken: false, persistSession: false } }
+        );
+
+        let isPublished = false;
+        if (bucketName === 'chapters') {
+          const { data: ch } = await supabaseForQuery
+            .from('chapters')
+            .select('id, status')
+            .or(`file_url.eq.${filePath},cover_url.eq.${filePath}`)
+            .limit(1);
+          isPublished = Array.isArray(ch) && ch[0]?.status === 'published';
+        } else if (bucketName === 'works') {
+          const { data: w } = await supabaseForQuery
+            .from('works')
+            .select('id, status')
+            .or(`file_url.eq.${filePath},cover_image_url.eq.${filePath},cover_url.eq.${filePath}`)
+            .limit(1);
+          isPublished = Array.isArray(w) && w[0]?.status === 'published';
+        }
+
+        if (!isPublished) {
+          return createErrorResponse(
+            ERROR_CODES.UNAUTHORIZED,
+            'No autenticado o archivo no publicado'
+          );
+        }
+      } catch (e) {
+        return createErrorResponse(ERROR_CODES.UNAUTHORIZED, 'Validación pública fallida', 401);
+      }
+    }
+
     // Usar service role key para operaciones administrativas como generar URLs firmadas
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -106,29 +146,85 @@ export async function POST(request) {
       }
     );
     
-    // Limpiar el filePath para evitar duplicación del prefijo del bucket
-    let cleanFilePath = filePath;
-    
+    // Limpiar y normalizar el filePath para evitar duplicación del prefijo del bucket y URLs completas
+    let cleanFilePath = (filePath || '').trim();
+
+    // Si es una URL completa de Supabase, extraer bucket y ruta
+    if (cleanFilePath.startsWith('http://') || cleanFilePath.startsWith('https://')) {
+      const extracted = extractFromStorageUrl(cleanFilePath);
+      if (extracted) {
+        // Priorizar bucket proporcionado por el cliente si existe, de lo contrario usar el extraído
+        bucketName = bucketName || extracted.bucket;
+        cleanFilePath = extracted.path;
+      } else {
+        // Si es una URL externa que no es de Supabase, no podemos firmarla
+        return createErrorResponse(
+          ERROR_CODES.VALIDATION_ERROR,
+          'No se puede generar URL firmada para URLs externas'
+        );
+      }
+    }
+
     // Si el filePath incluye el prefijo del bucket, removerlo
-    if (cleanFilePath.startsWith(`${bucketName}/`)) {
+    if (bucketName && cleanFilePath.startsWith(`${bucketName}/`)) {
       cleanFilePath = cleanFilePath.substring(`${bucketName}/`.length);
     }
-    
-    // Generar URL firmada con el bucket correcto y filePath limpio
-    const { data, error } = await supabase.storage
-      .from(bucketName)
-      .createSignedUrl(cleanFilePath, finalExpiresIn);
 
-    if (error) {
-      return NextResponse.json(
-        { error: 'Error generando URL firmada', details: error.message },
-        { status: 500 }
+    // Remover prefijos comunes innecesarios y barras iniciales
+    cleanFilePath = cleanFilePath.replace(/^public\//, '');
+    cleanFilePath = cleanFilePath.replace(/^\/+/, '');
+
+    // Log de depuración para entender bucket y ruta efectiva
+    try {
+      console.log('[signed-url] ▶ bucket:', bucketName, 'orig:', filePath, 'clean:', cleanFilePath);
+    } catch {}
+    // Intentar variantes comunes para evitar 404 por diferencias mínimas
+    const dropFirstFolder = (p) => {
+      const parts = (p || '').split('/');
+      return parts.length > 1 ? parts.slice(1).join('/') : p;
+    };
+    const candidates = Array.from(new Set([
+      cleanFilePath,
+      filePath,
+      cleanFilePath.replace(/^works\//, '').replace(/^chapters\//, ''),
+      cleanFilePath.startsWith('/') ? cleanFilePath.slice(1) : `/${cleanFilePath}`,
+      dropFirstFolder(cleanFilePath),
+    ].filter(Boolean)));
+
+    let signed = null;
+    let lastErr = null;
+    for (const candidate of candidates) {
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .createSignedUrl(candidate, finalExpiresIn);
+      if (data && !error) {
+        signed = data;
+        try { console.log('[signed-url] ✓ firmado con path:', candidate); } catch {}
+        break;
+      }
+      lastErr = error;
+      try { console.warn('[signed-url] ✗ intento fallido con path:', candidate, 'err:', error?.message); } catch {}
+    }
+
+    if (!signed) {
+      const msg = (lastErr?.message || '').toLowerCase();
+      if (msg.includes('not found') || msg.includes('no such') || msg.includes('does not exist')) {
+        return createErrorResponse(
+          ERROR_CODES.RESOURCE_NOT_FOUND,
+          'Archivo no encontrado en almacenamiento',
+          { bucket: bucketName, filePath: cleanFilePath, originalMessage: lastErr?.message }
+        );
+      }
+      return createErrorResponse(
+        ERROR_CODES.INTERNAL_ERROR,
+        'Error generando URL firmada',
+        { bucket: bucketName, filePath: cleanFilePath, originalMessage: lastErr?.message }
       );
     }
 
     return NextResponse.json({
       success: true,
-      signedUrl: data.signedUrl,
+      signedUrl: signed.signedUrl,
       expiresAt: new Date(Date.now() + finalExpiresIn * 1000).toISOString()
     });
   })(request);
