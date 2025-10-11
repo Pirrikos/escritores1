@@ -6,7 +6,19 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import PostsCarousel from '@/components/ui/PostsCarousel';
 import WorksCarousel from '@/components/ui/WorksCarousel';
 import ChaptersCarousel from '@/components/ui/ChaptersCarousel';
-import { AppHeader } from '@/components/ui';
+import CoverRenderer, { type TemplateId, type PaletteId } from '@/components/ui/CoverRenderer';
+import { AppHeader, Modal, ModalHeader, ModalBody, ModalFooter, Input, Textarea, Button, Icon, Icons } from '@/components/ui';
+
+// Normalizadores para valores permitidos en CoverRenderer
+function normalizeTemplateId(val: string): TemplateId {
+  const valid = ['template-1','template-2','template-3','template-4','template-5','template-6','template-7','template-8'] as const;
+  return (valid as readonly string[]).includes(val) ? (val as TemplateId) : 'template-1';
+}
+
+function normalizePaletteId(val: string): PaletteId {
+  const valid = ['marino','rojo','negro','verde','purpura'] as const;
+  return (valid as readonly string[]).includes(val) ? (val as PaletteId) : 'marino';
+}
 
 interface Post {
   id: string;
@@ -28,6 +40,7 @@ interface Work {
   author_id: string;
   created_at: string;
   cover_url?: string;
+  slug?: string;
   status?: 'draft' | 'published';
   profiles: {
     display_name: string;
@@ -59,6 +72,10 @@ function LibraryContent() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [deletingIds, setDeletingIds] = useState<Record<string, boolean>>({});
   const [publishingIds, setPublishingIds] = useState<Record<string, boolean>>({});
+  const [editTarget, setEditTarget] = useState<null | { type: 'work' | 'chapter'; id: string }>(null);
+  const [editForm, setEditForm] = useState<{ title: string; synopsis?: string; cover_url?: string }>({ title: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [coverSettings, setCoverSettings] = useState<{ mode: 'template' | 'url'; templateId: TemplateId; paletteId: PaletteId; authorName: string }>({ mode: 'template', templateId: 'template-1', paletteId: 'marino', authorName: 'Autor' });
 
   const loadPosts = useCallback(async (userId: string) => {
     try {
@@ -107,6 +124,7 @@ function LibraryContent() {
           author_id,
           created_at,
           cover_url,
+          slug,
           status,
           profiles!works_author_id_fkey (
             display_name
@@ -289,6 +307,95 @@ function LibraryContent() {
       setChapters(updated);
     }
     setPublishingIds((prev) => ({ ...prev, [`${type}:${id}`]: false }));
+  };
+
+  const openEditWork = (w: Work) => {
+    setEditTarget({ type: 'work', id: w.id });
+    setEditForm({ title: w.title || '', synopsis: w.synopsis || '', cover_url: w.cover_url || '' });
+    const authorName = w.profiles?.display_name || 'Autor';
+    if (w.cover_url && w.cover_url.startsWith('preview:')) {
+      const parts = w.cover_url.split(':');
+      const templateId = normalizeTemplateId(parts[1] || 'template-1');
+      const paletteId = normalizePaletteId(parts[2] || 'marino');
+      setCoverSettings({ mode: 'template', templateId, paletteId, authorName });
+    } else {
+      setCoverSettings({ mode: 'url', templateId: 'template-1', paletteId: 'marino', authorName });
+    }
+  };
+
+  const openEditChapter = (c: Chapter) => {
+    setEditTarget({ type: 'chapter', id: c.id });
+    setEditForm({ title: c.title || '', cover_url: c.cover_url || '' });
+    const authorName = c.profiles?.display_name || 'Autor';
+    if (c.cover_url && c.cover_url.startsWith('preview:')) {
+      const parts = c.cover_url.split(':');
+      const templateId = normalizeTemplateId(parts[1] || 'template-1');
+      const paletteId = normalizePaletteId(parts[2] || 'marino');
+      setCoverSettings({ mode: 'template', templateId, paletteId, authorName });
+    } else {
+      setCoverSettings({ mode: 'url', templateId: 'template-1', paletteId: 'marino', authorName });
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget || !session?.user?.id) return;
+    setSavingEdit(true);
+    try {
+      if (editTarget.type === 'work') {
+        // Resolver cover_url según el modo seleccionado
+        const current = works.find(w => w.id === editTarget.id);
+        let newCoverUrl = (editForm.cover_url ?? '').trim();
+        if (coverSettings.mode === 'template') {
+          const titleToUse = (editForm.title || current?.title || '').trim();
+          const author = coverSettings.authorName || current?.profiles?.display_name || 'Autor';
+          newCoverUrl = `preview:${coverSettings.templateId}:${coverSettings.paletteId}:${encodeURIComponent(titleToUse)}:${encodeURIComponent(author)}`;
+        } else {
+          // modo URL: usar la caja de texto
+          const cur = current?.cover_url;
+          newCoverUrl = newCoverUrl || cur || '';
+        }
+        const payload: any = { 
+          title: (editForm.title || '').trim(), 
+          synopsis: (editForm.synopsis || '').trim(),
+          cover_url: newCoverUrl || null,
+        };
+        const { error } = await supabase
+          .from('works')
+          .update(payload)
+          .eq('id', editTarget.id)
+          .eq('author_id', session.user.id);
+        if (error) throw error;
+        await loadWorks(session.user.id);
+      } else {
+        // Capítulo: permitir actualización de title y cover_url con el mismo selector
+        const current = chapters.find(c => c.id === editTarget.id);
+        let newCoverUrl = (editForm.cover_url ?? '').trim();
+        if (coverSettings.mode === 'template') {
+          const titleToUse = (editForm.title || current?.title || '').trim();
+          const author = coverSettings.authorName || current?.profiles?.display_name || 'Autor';
+          newCoverUrl = `preview:${coverSettings.templateId}:${coverSettings.paletteId}:${encodeURIComponent(titleToUse)}:${encodeURIComponent(author)}`;
+        } else {
+          const cur = current?.cover_url;
+          newCoverUrl = newCoverUrl || cur || '';
+        }
+        const payload: any = {
+          title: (editForm.title || '').trim(),
+          cover_url: newCoverUrl || null,
+        };
+        const { error } = await supabase
+          .from('chapters')
+          .update(payload)
+          .eq('id', editTarget.id)
+          .eq('author_id', session.user.id);
+        if (error) throw error;
+        await loadChapters(session.user.id);
+      }
+      setEditTarget(null);
+    } catch (err) {
+      console.error('Error guardando edición:', err);
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const deleteItem = async (type: 'posts' | 'works' | 'chapters', id: string) => {
@@ -474,7 +581,14 @@ function LibraryContent() {
               description="Tus libros y obras completas"
               className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
               renderItemFooter={(w) => (
-                <div className="flex items-center justify-center">
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-slate-600 text-white px-3 py-2 hover:bg-slate-700"
+                    onClick={(e) => { e.stopPropagation(); openEditWork(w); }}
+                    aria-label="Editar obra"
+                  >
+                    Editar
+                  </button>
                   <button
                     className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
                     onClick={(e) => { e.stopPropagation(); deleteItem('works', w.id); }}
@@ -497,6 +611,13 @@ function LibraryContent() {
                 className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
                 renderItemFooter={(w) => (
                   <div className="flex items-center justify-center gap-2">
+                    <button
+                      className="inline-flex items-center gap-2 rounded-md bg-slate-600 text-white px-3 py-2 hover:bg-slate-700"
+                      onClick={(e) => { e.stopPropagation(); openEditWork(w); }}
+                      aria-label="Editar obra"
+                    >
+                      Editar
+                    </button>
                     <button
                       className="inline-flex items-center gap-2 rounded-md bg-indigo-600 text-white px-3 py-2 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
                       onClick={(e) => { e.stopPropagation(); publishItem('works', w.id); }}
@@ -542,6 +663,13 @@ function LibraryContent() {
                                     </Link>
                                   )}
                                   <button
+                                    className="text-xs rounded-md bg-slate-600 text-white px-2 py-1 hover:bg-slate-700"
+                                    onClick={(e) => { e.stopPropagation(); openEditChapter(c as any); }}
+                                    aria-label="Editar capítulo"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
                                     className="text-xs rounded-md bg-red-600 text-white px-2 py-1 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
                                     onClick={(e) => { e.stopPropagation(); deleteItem('chapters', c.id); }}
                                     disabled={!!deletingIds[`chapters:${c.id}`]}
@@ -555,7 +683,14 @@ function LibraryContent() {
                           </ul>
                         </div>
                       )}
-                      <div className="flex items-center justify-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          className="inline-flex items-center gap-2 rounded-md bg-slate-600 text-white px-3 py-2 hover:bg-slate-700"
+                          onClick={(e) => { e.stopPropagation(); openEditWork(w); }}
+                          aria-label="Editar obra"
+                        >
+                          Editar
+                        </button>
                         <button
                           className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
                           onClick={(e) => { e.stopPropagation(); deleteItem('works', w.id); }}
@@ -578,7 +713,14 @@ function LibraryContent() {
               description="Tus historias cortas y capítulos independientes publicados"
               className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
               renderItemFooter={(c) => (
-                <div className="flex items-center justify-center">
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-slate-600 text-white px-3 py-2 hover:bg-slate-700"
+                    onClick={(e) => { e.stopPropagation(); openEditChapter(c as any); }}
+                    aria-label="Editar capítulo"
+                  >
+                    Editar
+                  </button>
                   <button
                     className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
                     onClick={(e) => { e.stopPropagation(); deleteItem('chapters', c.id); }}
@@ -602,6 +744,13 @@ function LibraryContent() {
                 renderItemFooter={(c) => (
                   <div className="flex items-center justify-center gap-2">
                     <button
+                      className="inline-flex items-center gap-2 rounded-md bg-slate-600 text-white px-3 py-2 hover:bg-slate-700"
+                      onClick={(e) => { e.stopPropagation(); openEditChapter(c as any); }}
+                      aria-label="Editar capítulo"
+                    >
+                      Editar
+                    </button>
+                    <button
                       className="inline-flex items-center gap-2 rounded-md bg-indigo-600 text-white px-3 py-2 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
                       onClick={(e) => { e.stopPropagation(); publishItem('chapters', c.id); }}
                       disabled={!!publishingIds[`chapters:${c.id}`]}
@@ -623,6 +772,124 @@ function LibraryContent() {
             )}
           </div>
         )}
+
+        {/* Modal de edición de obra/capítulo */}
+        <Modal
+          isOpen={!!editTarget}
+          onClose={() => setEditTarget(null)}
+          size="md"
+          title={editTarget?.type === 'work' ? 'Editar obra' : editTarget?.type === 'chapter' ? 'Editar capítulo' : ''}
+        >
+          <ModalBody>
+            <div className="space-y-4">
+              <Input
+                label="Título"
+                value={editForm.title}
+                onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))}
+              />
+              {editTarget?.type === 'work' && (
+                <Textarea
+                  label="Sinopsis"
+                  value={editForm.synopsis || ''}
+                  onChange={(e) => setEditForm((p) => ({ ...p, synopsis: e.target.value }))}
+                  minRows={4}
+                />
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-3 bg-gray-50 rounded border">
+                  <CoverRenderer
+                    mode="template"
+                    templateId={coverSettings.templateId}
+                    title={editForm.title || 'Título'}
+                    author={coverSettings.authorName}
+                    paletteId={coverSettings.paletteId}
+                    width={180}
+                    height={270}
+                    className="shadow-sm mx-auto"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-slate-700">Tipo de portada</label>
+                  <select
+                    className="w-full px-3 py-2 border rounded-lg"
+                    value={coverSettings.mode}
+                    onChange={(e) => setCoverSettings((p) => ({ ...p, mode: e.target.value as any }))}
+                  >
+                    <option value="template">Plantilla</option>
+                    <option value="url">URL de imagen</option>
+                  </select>
+                  {coverSettings.mode === 'template' ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Plantilla</label>
+                        <select
+                          className="w-full px-3 py-2 border rounded-lg"
+                          value={coverSettings.templateId}
+                          onChange={(e) => setCoverSettings((p) => ({ ...p, templateId: normalizeTemplateId(e.target.value) }))}
+                        >
+                          <option value="template-1">Franja Diagonal</option>
+                          <option value="template-2">Bloques</option>
+                          <option value="template-3">Tipografía</option>
+                          <option value="template-4">Minimal</option>
+                          <option value="template-5">Clásico</option>
+                          <option value="template-6">Moderno</option>
+                          <option value="template-7">Editorial</option>
+                          <option value="template-8">Geometría</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Paleta</label>
+                        <select
+                          className="w-full px-3 py-2 border rounded-lg"
+                          value={coverSettings.paletteId}
+                          onChange={(e) => setCoverSettings((p) => ({ ...p, paletteId: normalizePaletteId(e.target.value) }))}
+                        >
+                          <option value="marino">Marino Clásico</option>
+                          <option value="rojo">Rojo Profundo</option>
+                          <option value="negro">Negro Elegante</option>
+                          <option value="verde">Verde Esmeralda</option>
+                          <option value="purpura">Púrpura Editorial</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Autor (para portada)</label>
+                        <Input
+                          value={coverSettings.authorName}
+                          onChange={(e) => setCoverSettings((p) => ({ ...p, authorName: e.target.value }))}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">URL de imagen</label>
+                      <Input
+                        value={editForm.cover_url || ''}
+                        onChange={(e) => setEditForm((p) => ({ ...p, cover_url: e.target.value }))}
+                        placeholder="https://..."
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </ModalBody>
+          <ModalFooter align="right">
+            <button
+              className="inline-flex items-center gap-2 rounded-md bg-gray-100 text-gray-800 px-4 py-2 hover:bg-gray-200"
+              onClick={() => setEditTarget(null)}
+              disabled={savingEdit}
+            >
+              Cancelar
+            </button>
+            <button
+              className="inline-flex items-center gap-2 rounded-md bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={saveEdit}
+              disabled={savingEdit}
+            >
+              {savingEdit ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+          </ModalFooter>
+        </Modal>
 
         <footer className="text-center mt-12 text-gray-600">
           <p className="text-lg">Tu biblioteca personal de publicaciones</p>

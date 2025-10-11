@@ -621,6 +621,7 @@ export default function UsuarioPublicacionesPage({ params }: { params: Promise<{
             <PDFViewer
               fileUrl={pdfUrl}
               fileName={currentTitle || 'Documento PDF'}
+              authorName={displayName}
               onClose={() => {
                 try {
                   if (pdfUrl && pdfUrl.startsWith('blob:')) {

@@ -333,6 +333,7 @@ function WorkDetailPageContent({
           <PDFViewer
             fileUrl={pdfUrl}
             fileName={currentTitle || work.title}
+            authorName={work?.profiles?.display_name}
             onClose={() => {
               try {
                 if (pdfUrl && pdfUrl.startsWith('blob:')) {

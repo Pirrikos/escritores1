@@ -431,7 +431,6 @@ function MisLecturasPageContent() {
         <PDFViewer
           fileUrl={pdfUrl}
           fileName={currentTitle}
-          authorName={currentItem?.author}
           onClose={() => {
             try {
               if (pdfUrl && pdfUrl.startsWith('blob:')) {
@@ -443,53 +442,55 @@ function MisLecturasPageContent() {
             setCurrentItem(null);
           }}
           initialPage={initialPage}
-          onProgress={async (page, totalPages) => {
-            try {
-              // Normalizar filePath para registro estable
-              const normalizedPath = (() => {
-                const src = pdfUrl || '';
-                if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
-                  try {
-                    const u = new URL(src);
-                    const parts = u.pathname.split('/');
-                    const signIdx = parts.findIndex(p => p === 'sign');
-                    if (signIdx >= 0 && parts.length > signIdx + 2) {
-                      const bkt = parts[signIdx + 1];
-                      const rest = parts.slice(signIdx + 2).join('/');
-                      return `${bkt}/${rest}`;
-                    }
-                  } catch {}
-                }
-                return (currentItem?.filePath) || '';
-              })();
-                const current = currentItem || items.find(i => i.title === currentTitle);
-              await fetch('/api/activity/reading-progress', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({
-                  contentType: current?.type,
-                  contentSlug: current?.slug,
-                  bucket: current?.bucket || (current?.type === 'work' ? 'works' : 'chapters'),
-                  filePath: normalizedPath,
-                  lastPage: page,
-                  numPages: totalPages,
-                }),
-              });
-
-              // Guardar también en localStorage
+          onProgress={(page, totalPages) => {
+            (async () => {
               try {
-                const type = current?.type || 'work';
-                const slug = current?.slug || '';
-                const key = `reading-progress:${type}:${slug}`;
-                const payload = { last_page: page, num_pages: totalPages, updated_at: new Date().toISOString() };
-                if (typeof window !== 'undefined') {
-                  window.localStorage.setItem(key, JSON.stringify(payload));
-                }
-              } catch {}
-            } catch (e) {
-              // no-op
-            }
+                // Normalizar filePath para registro estable
+                const normalizedPath = (() => {
+                  const src = pdfUrl || '';
+                  if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
+                    try {
+                      const u = new URL(src);
+                      const parts = u.pathname.split('/');
+                      const signIdx = parts.findIndex(p => p === 'sign');
+                      if (signIdx >= 0 && parts.length > signIdx + 2) {
+                        const bkt = parts[signIdx + 1];
+                        const rest = parts.slice(signIdx + 2).join('/');
+                        return `${bkt}/${rest}`;
+                      }
+                    } catch {}
+                  }
+                  return (currentItem?.filePath) || '';
+                })();
+                const current = currentItem || items.find(i => i.title === currentTitle);
+                await fetch('/api/activity/reading-progress', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({
+                    contentType: current?.type,
+                    contentSlug: current?.slug,
+                    bucket: current?.bucket || (current?.type === 'work' ? 'works' : 'chapters'),
+                    filePath: normalizedPath,
+                    lastPage: page,
+                    numPages: totalPages,
+                  }),
+                });
+
+                // Guardar también en localStorage
+                try {
+                  const type = current?.type || 'work';
+                  const slug = current?.slug || '';
+                  const key = `reading-progress:${type}:${slug}`;
+                  const payload = { last_page: page, num_pages: totalPages, updated_at: new Date().toISOString() };
+                  if (typeof window !== 'undefined') {
+                    window.localStorage.setItem(key, JSON.stringify(payload));
+                  }
+                } catch {}
+              } catch (e) {
+                // no-op
+              }
+            })().catch(() => {});
           }}
         />
         )}

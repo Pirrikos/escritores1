@@ -342,6 +342,7 @@ function ChapterDetailPageContent({
         <PDFViewer
           fileUrl={pdfUrl}
           fileName={currentTitle || 'Capítulo'}
+          authorName={chapter?.profiles?.display_name}
           initialPage={initialPage}
           onClose={() => {
             try {

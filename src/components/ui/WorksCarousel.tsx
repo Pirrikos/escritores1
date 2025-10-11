@@ -14,6 +14,7 @@ interface Work {
   author_id: string;
   created_at: string;
   cover_url?: string;
+  slug?: string;
   profiles: {
     display_name: string;
   };
@@ -166,7 +167,7 @@ export default function WorksCarousel({
           {works.map((work) => (
             <div key={work.id} className="flex-shrink-0 w-64">
               <Link
-                href={`/works/${generateSlug(work.title)}`}
+                href={`/works/${work.slug || generateSlug(work.title)}`}
                 className="group cursor-pointer block"
               >
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 p-4">

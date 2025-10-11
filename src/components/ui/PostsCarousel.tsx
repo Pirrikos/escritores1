@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon, Icons } from '@/components/ui';
 import LikeButton from '@/components/ui/LikeButton';
+import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
+import { generateSlug } from '@/lib/slugUtils';
 
 interface Post {
   id: string;
@@ -41,6 +43,65 @@ export default function PostsCarousel({
   renderItemFooter
 }: PostsCarouselProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const supabase = getSupabaseBrowserClient();
+  const [validWorkSlugs, setValidWorkSlugs] = useState<Set<string>>(new Set());
+
+  // Resolver qué títulos de posts corresponden a obras publicadas
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const titles = Array.from(new Set(posts.map(p => (p.title || '').trim()).filter(Boolean)));
+        if (titles.length === 0) {
+          if (!cancelled) setValidWorkSlugs(new Set());
+          return;
+        }
+        const slugs = titles.map(t => generateSlug(t));
+        const slugSet = new Set<string>();
+
+        // Intento principal: por slug almacenado
+        try {
+          const { data: bySlug } = await supabase
+            .from('works')
+            .select('slug, title, status')
+            .eq('status', 'published')
+            .in('slug', slugs)
+            .limit(500);
+          for (const w of (bySlug || [])) {
+            const rawSlug = (w as any)?.slug as string | undefined;
+            const title = (w as any)?.title as string | undefined;
+            const candidate = (typeof rawSlug === 'string' && rawSlug) ? rawSlug : (title ? generateSlug(title) : '');
+            if (candidate) slugSet.add(candidate);
+          }
+        } catch {}
+
+        // Fallback: por coincidencia exacta de título
+        const unresolvedTitles = titles.filter(t => !slugSet.has(generateSlug(t)));
+        if (unresolvedTitles.length > 0) {
+          try {
+            const { data: byTitle } = await supabase
+              .from('works')
+              .select('slug, title, status')
+              .eq('status', 'published')
+              .in('title', unresolvedTitles)
+              .limit(500);
+            for (const w of (byTitle || [])) {
+              const rawSlug = (w as any)?.slug as string | undefined;
+              const title = (w as any)?.title as string | undefined;
+              const candidate = (typeof rawSlug === 'string' && rawSlug) ? rawSlug : (title ? generateSlug(title) : '');
+              if (candidate) slugSet.add(candidate);
+            }
+          } catch {}
+        }
+
+        if (!cancelled) setValidWorkSlugs(slugSet);
+      } catch {
+        if (!cancelled) setValidWorkSlugs(new Set());
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [posts, supabase]);
 
   const scrollLeft = () => {
     if (scrollContainerRef.current) {
@@ -155,9 +216,29 @@ export default function PostsCarousel({
             >
               {/* Post Content */}
               <div className="space-y-3">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  {post.title}
-                </h3>
+                {(() => {
+                  const candidateSlug = generateSlug(post.title || '');
+                  const isWorkTitle = candidateSlug && validWorkSlugs.has(candidateSlug);
+                  const titleEl = (
+                    <span className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      {post.title}
+                    </span>
+                  );
+                  return (
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
+                      {isWorkTitle ? (
+                        <Link href={`/works/${candidateSlug}`} className="group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                          <span className="inline-flex items-center gap-1">
+                            <Icon path={Icons.book} size="xs" className="text-indigo-600" />
+                            {titleEl}
+                          </span>
+                        </Link>
+                      ) : (
+                        titleEl
+                      )}
+                    </h3>
+                  );
+                })()}
                 
                 {post.content && (
                   <p className="text-gray-700 dark:text-gray-300 text-sm line-clamp-4 leading-relaxed">
