@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -28,7 +28,7 @@ type CommentRow = {
 
 const VALID_TYPES = new Set(['post', 'chapter', 'work']);
 
-export default function ComentariosPage() {
+function ComentariosContent() {
   const searchParams = useSearchParams();
   const targetType = searchParams.get('target_type') || '';
   const targetId = searchParams.get('target_id') || '';
@@ -171,5 +171,13 @@ export default function ComentariosPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ComentariosPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Cargando…</div>}>
+      <ComentariosContent />
+    </Suspense>
   );
 }
