@@ -7,7 +7,7 @@
   "crons": [
     {
       "path": "/api/storage/clean-orphans",
-      "schedule": "0 3 * * *" // diario a las 03:00 UTC
+      "schedule": "0 3 * * *"
     }
   ],
   "headers": [
