@@ -15,6 +15,7 @@ import ToastContainer from '@/components/ui/ToastContainer';
 import { WorkDetailSkeleton } from '@/components/ui/WorkDetailSkeleton';
 import { generateSlug } from '@/lib/slugUtils';
 import Image from 'next/image';
+import { logPdfView } from '@/lib/activityLogger';
 
 interface Chapter {
   id: string;
@@ -32,6 +33,9 @@ interface Chapter {
   profiles: {
     display_name: string;
   };
+  parent_work_slug?: string | null;
+  parent_work_title?: string | null;
+  parent_work_cover_url?: string | null;
 }
 
 export default function ChapterDetailPage() {
@@ -85,6 +89,10 @@ function ChapterDetailPageContent({
   const [isPDFViewerOpen, setIsPDFViewerOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [currentTitle, setCurrentTitle] = useState<string>('');
+  const [initialPage, setInitialPage] = useState<number | undefined>(undefined);
+  const [isSaved, setIsSaved] = useState(false);
+  const [checkingSaved, setCheckingSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const loadChapterBySlug = useCallback(async (chapterSlug: string) => {
     try {
@@ -109,6 +117,11 @@ function ChapterDetailPageContent({
           slug,
           profiles!chapters_author_id_fkey (
             display_name
+          ),
+          works:works!chapters_work_id_fkey (
+            slug,
+            title,
+            cover_url
           )
         `)
         .eq('status', 'published');
@@ -124,12 +137,20 @@ function ChapterDetailPageContent({
       }
 
       // Normalizar tipo de profiles (algunas respuestas lo devuelven como array)
-      const normalizedChapters: Chapter[] = (data || []).map((d: any) => ({
-        ...d,
-        profiles: Array.isArray(d.profiles)
+      const normalizedChapters: Chapter[] = (data || []).map((d: any) => {
+        const profilesNorm = Array.isArray(d.profiles)
           ? (d.profiles[0] ?? { display_name: '' })
-          : d.profiles,
-      }));
+          : d.profiles;
+        const worksRaw = d.works;
+        const workObj = Array.isArray(worksRaw) ? (worksRaw[0] || null) : worksRaw || null;
+        return {
+          ...d,
+          profiles: profilesNorm,
+          parent_work_slug: workObj?.slug || null,
+          parent_work_title: workObj?.title || null,
+          parent_work_cover_url: workObj?.cover_url || null,
+        } as Chapter;
+      });
 
       // Buscar el capítulo que coincida con el slug
       const foundChapter = normalizedChapters.find((c) => {
@@ -175,12 +196,64 @@ function ChapterDetailPageContent({
       const fileType = filePath ? detectFileType(filePath) : 'other';
       if (view === 'pdf' && filePath && fileType === 'pdf') {
         try {
+          // Calcular initialPage a partir de BD (si hay usuario) y localStorage
+          let ip: number | undefined = undefined;
+          try {
+            const { data: auth } = await supabase.auth.getUser();
+            if (auth?.user) {
+              const { data: rp } = await supabase
+                .from('reading_progress')
+                .select('last_page, updated_at')
+                .eq('content_type', 'chapter')
+                .eq('content_slug', slug)
+                .order('updated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              const lpDb = rp?.last_page;
+              if (typeof lpDb === 'number' && lpDb >= 1) {
+                ip = lpDb;
+              }
+            }
+          } catch {}
+
+          if (!ip) {
+            try {
+              const key = `reading-progress:chapter:${slug}`;
+              if (typeof window !== 'undefined') {
+                const raw = window.localStorage.getItem(key);
+                if (raw) {
+                  const parsed = JSON.parse(raw);
+                  const lpLs = parsed?.last_page;
+                  if (typeof lpLs === 'number' && lpLs >= 1) {
+                    ip = lpLs;
+                  }
+                }
+              }
+            } catch {}
+          }
+
+          if (ip && ip >= 1) {
+            setInitialPage(ip);
+          } else {
+            setInitialPage(undefined);
+          }
+
           const { data, error } = await supabase.storage
             .from('chapters')
             .createSignedUrl(filePath, 3600);
           const signedUrl = error ? null : data?.signedUrl;
-          setPdfUrl(signedUrl || filePath);
+          // Descargar como blob para evitar net::ERR_ABORTED y usar object URL
+          let viewerUrl = signedUrl || filePath;
+          if (signedUrl) {
+            try {
+              const pdfResp = await fetch(signedUrl, { cache: 'no-store' });
+              const blob = await pdfResp.blob();
+              viewerUrl = URL.createObjectURL(blob);
+            } catch {}
+          }
+          setPdfUrl(viewerUrl);
           setCurrentTitle(chapter.title);
+          await logPdfView({ contentType: 'chapter', contentSlug: slug, urlOrPath: signedUrl || filePath, bucketOverride: 'chapters' });
           setIsPDFViewerOpen(true);
         } catch (e) {
           addToast({ type: 'error', message: 'No se pudo abrir el PDF del capítulo.' });
@@ -189,6 +262,32 @@ function ChapterDetailPageContent({
     };
     tryOpenPdf();
   }, [chapter, searchParams, supabase, addToast]);
+
+  // Comprobar si el capítulo ya está guardado en Mis Lecturas
+  useEffect(() => {
+    const checkSaved = async () => {
+      try {
+        if (!chapter || !slug) {
+          setIsSaved(false);
+          return;
+        }
+        setCheckingSaved(true);
+        const res = await fetch(`/api/reading-list?chapterSlug=${encodeURIComponent(slug)}`, { method: 'GET', credentials: 'include' });
+        if (!res.ok) {
+          setIsSaved(false);
+          return;
+        }
+        const json = await res.json();
+        const saved = !!(json && typeof json.saved !== 'undefined' ? json.saved : false);
+        setIsSaved(saved);
+      } catch (e) {
+        setIsSaved(false);
+      } finally {
+        setCheckingSaved(false);
+      }
+    };
+    void checkSaved();
+  }, [slug, chapter]);
 
   if (loading) {
     return <WorkDetailSkeleton />;
@@ -243,7 +342,63 @@ function ChapterDetailPageContent({
         <PDFViewer
           fileUrl={pdfUrl}
           fileName={currentTitle || 'Capítulo'}
-          onClose={() => setIsPDFViewerOpen(false)}
+          initialPage={initialPage}
+          onClose={() => {
+            try {
+              if (pdfUrl && pdfUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(pdfUrl);
+              }
+            } catch {}
+            setPdfUrl(null);
+            setIsPDFViewerOpen(false);
+          }}
+          onProgress={async (page, totalPages) => {
+            try {
+              // Normalizar filePath para registro estable
+              const normalizedPath = (() => {
+                const src = pdfUrl || '';
+                if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
+                  try {
+                    const u = new URL(src);
+                    const parts = u.pathname.split('/');
+                    const signIdx = parts.findIndex(p => p === 'sign');
+                    if (signIdx >= 0 && parts.length > signIdx + 2) {
+                      const bkt = parts[signIdx + 1];
+                      const rest = parts.slice(signIdx + 2).join('/');
+                      return `${bkt}/${rest}`;
+                    }
+                  } catch {}
+                }
+                // Fallback al file_url real del capítulo
+                return chapter?.file_url || '';
+              })();
+
+              await fetch('/api/activity/reading-progress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                  contentType: 'chapter',
+                  contentSlug: slug,
+                  bucket: 'chapters',
+                  filePath: normalizedPath,
+                  lastPage: page,
+                  numPages: totalPages,
+                }),
+              });
+
+              // Guardar también en localStorage (fallback para usuarios sin sesión)
+              try {
+                const key = `reading-progress:chapter:${slug}`;
+                const payload = { last_page: page, num_pages: totalPages, updated_at: new Date().toISOString() };
+                if (typeof window !== 'undefined') {
+                  window.localStorage.setItem(key, JSON.stringify(payload));
+                }
+              } catch {}
+            } catch (e) {
+              // no-op
+            }
+          }}
         />
       )}
       {/* Header */}
@@ -427,6 +582,57 @@ function ChapterDetailPageContent({
                       size="lg"
                       className="flex-1"
                     />
+
+                    {/* Guardar capítulo en Mis Lecturas */}
+                    {checkingSaved ? (
+                      <div className="flex-1 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-200">
+                        Comprobando estado de Mis Lecturas…
+                      </div>
+                    ) : isSaved ? (
+                      <div className="flex-1 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 flex items-center justify-between">
+                        <span className="text-sm text-indigo-700 dark:text-indigo-300">
+                          Este capítulo ya está en Mis Lecturas.
+                        </span>
+                        <Link
+                          href="/mis-lecturas"
+                          className="inline-flex items-center px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-sm"
+                        >
+                          Ir a Mis Lecturas
+                        </Link>
+                      </div>
+                    ) : (
+                      <button
+                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700 hover:bg-green-100 disabled:opacity-50"
+                        disabled={saving}
+                        onClick={async () => {
+                          try {
+                            setSaving(true);
+                            const resp = await fetch('/api/reading-list', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ chapterSlug: slug }),
+                              credentials: 'include'
+                            });
+                            if (resp.status === 401) {
+                              addToast({ type: 'error', message: 'Inicia sesión para guardar en Mis Lecturas.' });
+                              return;
+                            }
+                            if (!resp.ok) {
+                              addToast({ type: 'error', message: 'No se pudo guardar en Mis Lecturas.' });
+                              return;
+                            }
+                            setIsSaved(true);
+                            addToast({ type: 'success', message: 'Capítulo guardado en Mis Lecturas.' });
+                          } catch (e) {
+                            addToast({ type: 'error', message: 'Error al guardar en Mis Lecturas.' });
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                      >
+                        Guardar a Mis Lecturas
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

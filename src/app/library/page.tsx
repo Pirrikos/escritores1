@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import PostsCarousel from '@/components/ui/PostsCarousel';
 import WorksCarousel from '@/components/ui/WorksCarousel';
@@ -237,6 +238,8 @@ function LibraryContent() {
   );
   const publishedSerialWorks = publishedWorks.filter((w) => workIdsWithChapters.has(w.id));
   const draftSerialWorks = draftWorks.filter((w) => workIdsWithChapters.has(w.id));
+  const independentPublishedWorks = publishedWorks.filter((w) => !workIdsWithChapters.has(w.id));
+  const independentPublishedChapters = publishedChapters.filter((c) => !c.work_id);
 
   const publishItem = async (type: 'posts' | 'works' | 'chapters', id: string) => {
     setPublishingIds((prev) => ({ ...prev, [`${type}:${id}`]: true }));
@@ -314,14 +317,13 @@ function LibraryContent() {
       if (type === 'works') {
         const { data: workData } = await supabase
           .from('works')
-          .select('file_url, cover_image_url, cover_url')
+          .select('file_url, cover_url')
           .eq('id', id)
           .limit(1)
           .maybeSingle();
         if (workData) {
           const wf = [
             extractRel('works', (workData as any).file_url),
-            extractRel('works', (workData as any).cover_image_url),
             extractRel('works', (workData as any).cover_url),
           ].filter(Boolean) as string[];
           workFiles.push(...wf);
@@ -465,9 +467,10 @@ function LibraryContent() {
               />
             )}
 
+            {/* Sección: Obras independientes (obras completas) */}
             <WorksCarousel 
-              works={publishedWorks}
-              title="Mis obras"
+              works={independentPublishedWorks}
+              title="Obras independientes"
               description="Tus libros y obras completas"
               className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
               renderItemFooter={(w) => (
@@ -518,28 +521,61 @@ function LibraryContent() {
             {publishedSerialWorks.length > 0 && (
               <WorksCarousel 
                 works={publishedSerialWorks}
-                title="Mis obras por capítulos"
-                description="Tus obras seriadas publicadas"
+                title="Obras por capítulos"
+                description="Tus obras seriadas publicadas con capítulos"
                 className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
-                renderItemFooter={(w) => (
-                  <div className="flex items-center justify-center">
-                    <button
-                      className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                      onClick={(e) => { e.stopPropagation(); deleteItem('works', w.id); }}
-                      disabled={!!deletingIds[`works:${w.id}`]}
-                      aria-label="Eliminar obra"
-                    >
-                      {deletingIds[`works:${w.id}`] ? 'Eliminando…' : 'Eliminar'}
-                    </button>
-                  </div>
-                )}
+                renderItemFooter={(w) => {
+                  const relatedChapters = publishedChapters.filter((c) => c.work_id === w.id);
+                  return (
+                    <div className="space-y-3">
+                      {relatedChapters.length > 0 && (
+                        <div className="rounded-lg border border-slate-200 bg-white/60 p-3">
+                          <h4 className="text-sm font-medium text-slate-800 mb-2">Capítulos publicados</h4>
+                          <ul className="space-y-1">
+                            {relatedChapters.map((c) => (
+                              <li key={c.id} className="flex items-center justify-between">
+                                <span className="text-sm text-slate-700">{c.title}</span>
+                                <div className="flex items-center gap-2">
+                                  {c.slug && (
+                                    <Link href={`/chapters/${c.slug}`} className="text-xs text-indigo-700 hover:underline">
+                                      Abrir
+                                    </Link>
+                                  )}
+                                  <button
+                                    className="text-xs rounded-md bg-red-600 text-white px-2 py-1 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    onClick={(e) => { e.stopPropagation(); deleteItem('chapters', c.id); }}
+                                    disabled={!!deletingIds[`chapters:${c.id}`]}
+                                    aria-label="Eliminar capítulo"
+                                  >
+                                    {deletingIds[`chapters:${c.id}`] ? 'Eliminando…' : 'Eliminar'}
+                                  </button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-center">
+                        <button
+                          className="inline-flex items-center gap-2 rounded-md bg-red-600 text-white px-3 py-2 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                          onClick={(e) => { e.stopPropagation(); deleteItem('works', w.id); }}
+                          disabled={!!deletingIds[`works:${w.id}`]}
+                          aria-label="Eliminar obra"
+                        >
+                          {deletingIds[`works:${w.id}`] ? 'Eliminando…' : 'Eliminar'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }}
               />
             )}
 
+            {/* Sección: Capítulos independientes */}
             <ChaptersCarousel 
-              chapters={publishedChapters}
-              title="Mis capítulos"
-              description="Tus historias cortas y capítulos publicados"
+              chapters={independentPublishedChapters}
+              title="Capítulos independientes"
+              description="Tus historias cortas y capítulos independientes publicados"
               className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
               renderItemFooter={(c) => (
                 <div className="flex items-center justify-center">

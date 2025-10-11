@@ -40,11 +40,11 @@ async function performCleanup() {
     return handleAuthError(new Error('No autenticado'));
   }
 
-  // works: file_url, cover_url, cover_image_url
+  // works: file_url, cover_url
   try {
     let query = supabase
       .from('works')
-      .select('file_url, cover_url, cover_image_url, author_id');
+      .select('file_url, cover_url, author_id');
     if (!isGlobal && userId) {
       query = query.eq('author_id', userId);
     }
@@ -54,10 +54,8 @@ async function performCleanup() {
         const uid = row?.author_id || userId;
         const fp1 = normalizePath(uid, 'works', row?.file_url);
         const fp2 = normalizePath(uid, 'works', row?.cover_url);
-        const fp3 = normalizePath(uid, 'works', row?.cover_image_url);
         if (fp1) referencedWorks.add(fp1);
         if (fp2) referencedWorks.add(fp2);
-        if (fp3) referencedWorks.add(fp3);
       }
     }
   } catch {}
@@ -208,10 +206,16 @@ async function performCleanup() {
   return NextResponse.json(result);
 }
 
-export const GET = withErrorHandling(async () => {
-  return await performCleanup();
-});
+export async function GET(request) {
+  const handler = withErrorHandling(async () => {
+    return await performCleanup();
+  });
+  return handler(request);
+}
 
-export const POST = withErrorHandling(async () => {
-  return await performCleanup();
-});
+export async function POST(request) {
+  const handler = withErrorHandling(async () => {
+    return await performCleanup();
+  });
+  return handler(request);
+}

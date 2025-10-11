@@ -4,7 +4,7 @@ import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } 
 import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from '@/lib/securityLogger.js';
 import { withRateLimit } from '@/lib/rateLimiter.js';
 
-async function POST(request) {
+async function postHandler(request) {
   try {
     const supabase = await createServerSupabaseClient();
     
@@ -122,6 +122,7 @@ async function POST(request) {
 }
 
 // Aplicar rate limiting y error handling
-const rateLimitedPOST = withRateLimit('API_GENERAL')(POST);
-export { rateLimitedPOST as POST };
-export default withErrorHandling(POST);
+const rateLimitedPOST = withRateLimit('API_GENERAL')(postHandler);
+export async function POST(request) {
+  return withErrorHandling(rateLimitedPOST)(request);
+}

@@ -205,7 +205,7 @@ function UploadChaptersContent() {
         query = query.eq('work_id', sanitizedData.work_id);
       }
       
-      const { data: existingChapter } = await query.single();
+      const { data: existingChapter } = await query.maybeSingle();
 
       if (existingChapter) {
         slug = `${slug}-${Date.now()}`;

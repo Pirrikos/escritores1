@@ -3,8 +3,8 @@
  * Provides backward compatibility and smooth API evolution
  */
 
-import { securityLogger } from './securityLogger.js';
-import { monitoring } from './monitoring.js';
+import securityLogger from './securityLogger.js';
+import * as monitoring from './monitoring.js';
 
 // Supported API versions
 export const API_VERSIONS = {

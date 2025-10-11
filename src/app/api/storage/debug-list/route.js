@@ -5,12 +5,13 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { withErrorHandling, createErrorResponse, ERROR_CODES } from '@/lib/errorHandler.js';
 
-export const GET = withErrorHandling(async (request) => {
-  try {
-    const url = new URL(request.url);
-    const bucket = url.searchParams.get('bucket') || 'works';
-    const prefix = url.searchParams.get('prefix') || '';
-    const mode = url.searchParams.get('mode') || 'objects';
+export async function GET(request) {
+  const handler = withErrorHandling(async (request) => {
+    try {
+      const url = new URL(request.url);
+      const bucket = url.searchParams.get('bucket') || 'works';
+      const prefix = url.searchParams.get('prefix') || '';
+      const mode = url.searchParams.get('mode') || 'objects';
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -40,4 +41,6 @@ export const GET = withErrorHandling(async (request) => {
   } catch (e) {
     return createErrorResponse(ERROR_CODES.INTERNAL_ERROR, 'Error inesperado en debug-list', { message: e.message });
   }
-});
+  });
+  return handler(request);
+}

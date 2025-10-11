@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { logPdfView, normalizeBucketAndPath } from '@/lib/activityLogger';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import WorksCarousel from '@/components/ui/WorksCarousel';
 import { AppHeader } from '@/components/ui';
@@ -32,6 +33,7 @@ export default function WorksByChaptersCatalogPage() {
   const [isPDFViewerOpen, setIsPDFViewerOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [currentTitle, setCurrentTitle] = useState<string | null>(null);
+  const [currentSlug, setCurrentSlug] = useState<string | null>(null);
 
   const openChapterFile = useCallback(async (filePath?: string, slug?: string, fileType?: string, title?: string) => {
     try {
@@ -39,6 +41,7 @@ export default function WorksByChaptersCatalogPage() {
       let effectivePath = filePath;
       let effectiveType = fileType;
       let effectiveTitle = title;
+      let resolvedSlug = slug;
       if (!effectivePath && slug) {
         try {
           const { data: ch, error } = await supabase
@@ -57,9 +60,24 @@ export default function WorksByChaptersCatalogPage() {
           console.warn('No se pudo resolver file_url por slug', e);
         }
       }
+      // Si no tenemos slug pero sí ruta de archivo, intentar resolver el slug real desde BD
+      if (!resolvedSlug && effectivePath) {
+        try {
+          const { data: ch2 } = await supabase
+            .from('chapters')
+            .select('slug')
+            .eq('file_url', effectivePath)
+            .eq('status', 'published')
+            .limit(1)
+            .single();
+          if (ch2?.slug) {
+            resolvedSlug = ch2.slug as string;
+          }
+        } catch {}
+      }
       // Si aún no hay archivo, navegar al capítulo pasando ?view=pdf para abrir visor automático
       if (!effectivePath) {
-        window.location.href = `/chapters/${slug || ''}?view=pdf`;
+        window.location.href = `/chapters/${resolvedSlug || ''}?view=pdf`;
         return;
       }
 
@@ -74,15 +92,67 @@ export default function WorksByChaptersCatalogPage() {
           });
           const signed = res.ok ? (await res.json())?.signedUrl : null;
           const urlToUse = signed || effectivePath;
-          setPdfUrl(urlToUse);
+          const norm = normalizeBucketAndPath(urlToUse, { bucket: 'chapters', path: effectivePath || urlToUse });
+          if (!resolvedSlug && norm.path) {
+            try {
+              const { data: ch3 } = await supabase
+                .from('chapters')
+                .select('slug')
+                .eq('file_url', norm.path)
+                .eq('status', 'published')
+                .limit(1)
+                .single();
+              if (ch3?.slug) {
+                resolvedSlug = ch3.slug as string;
+              }
+            } catch {}
+          }
+          // Descargar como blob y usar object URL para evitar net::ERR_ABORTED en visor
+          let viewerUrl = urlToUse;
+          if (signed) {
+            try {
+              const pdfResp = await fetch(signed, { cache: 'no-store' });
+              const blob = await pdfResp.blob();
+              viewerUrl = URL.createObjectURL(blob);
+            } catch (blobErr) {
+              // Si falla la descarga como blob, usar la URL firmada directamente
+              viewerUrl = urlToUse;
+            }
+          }
+          setPdfUrl(viewerUrl);
           setCurrentTitle(effectiveTitle || 'Capítulo');
+          setCurrentSlug(resolvedSlug || slug || null);
+          if (resolvedSlug || slug) {
+            await logPdfView({ contentType: 'chapter', contentSlug: resolvedSlug || (slug as string), urlOrPath: norm.path || effectivePath });
+          }
           setIsPDFViewerOpen(true);
           return;
         } catch (e) {
           console.warn('No se pudo firmar la URL, se usará la ruta por defecto.', e);
-          setPdfUrl(effectivePath);
+          const norm = normalizeBucketAndPath(effectivePath || '', { bucket: 'chapters', path: effectivePath || '' });
+          if (!resolvedSlug && norm.path) {
+            try {
+              const { data: ch3 } = await supabase
+                .from('chapters')
+                .select('slug')
+                .eq('file_url', norm.path)
+                .eq('status', 'published')
+                .limit(1)
+                .single();
+              if (ch3?.slug) {
+                resolvedSlug = ch3.slug as string;
+              }
+            } catch {}
+          }
+          // Sin URL firmada, no abrir visor para evitar errores de carga
+          // Mantener comportamiento previo sólo si se desea ruta directa
+          // Aquí preferimos no abrir si no hay URL firmada
+          // setPdfUrl(effectivePath);
           setCurrentTitle(effectiveTitle || 'Capítulo');
-          setIsPDFViewerOpen(true);
+          setCurrentSlug(resolvedSlug || slug || null);
+          if (resolvedSlug || slug) {
+            await logPdfView({ contentType: 'chapter', contentSlug: resolvedSlug || (slug as string), urlOrPath: effectivePath });
+          }
           return;
         }
       }
@@ -166,9 +236,18 @@ export default function WorksByChaptersCatalogPage() {
           .limit(1000);
         if (!chErr && Array.isArray(chRows)) {
           const map: Record<string, Array<{ id: string; title: string; chapter_number: number; slug?: string; file_url?: string; file_type?: string }>> = {};
+          const seen: Record<string, Set<string>> = {};
           for (const ch of chRows) {
             const wid = (ch as any).work_id;
             if (!wid) continue;
+            const slug = String((ch as any).slug || '').toLowerCase();
+            const num = String((ch as any).chapter_number ?? '');
+            const titleNorm = String((ch as any).title || '').trim().toLowerCase();
+            const key = [slug, num, titleNorm].filter(Boolean).join('|');
+            const seenSet = seen[wid] || new Set<string>();
+            if (key && seenSet.has(key)) continue;
+            seenSet.add(key);
+            seen[wid] = seenSet;
             const list = map[wid] || [];
             list.push({ id: (ch as any).id, title: (ch as any).title, chapter_number: (ch as any).chapter_number, slug: (ch as any).slug, file_url: (ch as any).file_url, file_type: (ch as any).file_type });
             map[wid] = list;
@@ -246,34 +325,6 @@ export default function WorksByChaptersCatalogPage() {
                 description=""
                 showStats={false}
                 className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
-                renderItemFooter={(work) => {
-                  const chapters = chaptersByWork[work.id] || [];
-                  return (
-                    <div className="mt-2 bg-slate-50 border border-slate-200 rounded-md p-2">
-                      <div className="text-xs font-semibold text-slate-700 mb-1">Capítulos</div>
-                      {chapters.length === 0 ? (
-                        <div className="text-xs text-slate-500">No hay capítulos publicados</div>
-                      ) : (
-                        <ul className="space-y-1">
-                          {chapters.map((ch) => (
-                            <li key={ch.id} className="flex items-center justify-between">
-                              <span className="text-xs text-slate-700">#{ch.chapter_number} — {ch.title}</span>
-                              <button
-                                type="button"
-                                onClick={() => openChapterFile(ch.file_url, ch.slug || generateSlug(ch.title), ch.file_type, ch.title)}
-                                className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline disabled:text-slate-400"
-                                title={ch.file_url ? (ch.file_type === 'application/pdf' ? 'Abrir PDF' : 'Abrir archivo del capítulo') : 'Abrir capítulo'}
-                                disabled={false}
-                              >
-                                Ver
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                }}
               />
             ) : (
               <div key={cat} className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60">
@@ -289,7 +340,61 @@ export default function WorksByChaptersCatalogPage() {
           <PDFViewer
             fileUrl={pdfUrl}
             fileName={currentTitle || 'Documento PDF'}
-            onClose={() => setIsPDFViewerOpen(false)}
+            onClose={() => {
+              try {
+                if (pdfUrl && pdfUrl.startsWith('blob:')) {
+                  URL.revokeObjectURL(pdfUrl);
+                }
+              } catch {}
+              setPdfUrl(null);
+              setIsPDFViewerOpen(false);
+            }}
+            onProgress={async (page, totalPages) => {
+              try {
+                // Normalizar filePath para registro estable
+                const normalizedPath = (() => {
+                  const src = pdfUrl || '';
+                  if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
+                    try {
+                      const u = new URL(src);
+                      const parts = u.pathname.split('/');
+                      const signIdx = parts.findIndex(p => p === 'sign');
+                      if (signIdx >= 0 && parts.length > signIdx + 2) {
+                        const bkt = parts[signIdx + 1];
+                        const rest = parts.slice(signIdx + 2).join('/');
+                        return `${bkt}/${rest}`;
+                      }
+                    } catch {}
+                  }
+                  return src;
+                })();
+
+                await fetch('/api/activity/reading-progress', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({
+                    contentType: 'chapter',
+                    contentSlug: currentSlug || '',
+                    bucket: 'chapters',
+                    filePath: normalizedPath,
+                    lastPage: page,
+                    numPages: totalPages,
+                  }),
+                });
+
+                // Guardar también en localStorage como respaldo
+                try {
+                  const type = 'chapter';
+                  const slug = currentSlug || '';
+                  const key = `reading-progress:${type}:${slug}`;
+                  const payload = { last_page: page, num_pages: totalPages, updated_at: new Date().toISOString() };
+                  if (typeof window !== 'undefined') {
+                    window.localStorage.setItem(key, JSON.stringify(payload));
+                  }
+                } catch {}
+              } catch {}
+            }}
           />
         )}
 

@@ -8,7 +8,7 @@ import {
   createVersionedResponse, 
   API_VERSIONS 
 } from '@/lib/apiVersioning.js';
-import { errorHandler } from '@/lib/errorHandler.js';
+import { createErrorResponse, ERROR_CODES } from '@/lib/errorHandler.js';
 
 // This endpoint supports v1 only
 const SUPPORTED_VERSIONS = [API_VERSIONS.V1];
@@ -52,7 +52,11 @@ export async function GET(request) {
     });
     
   } catch (error) {
-    return errorHandler.handleError(error, 'API_EXAMPLE_ERROR');
+    return createErrorResponse(
+      ERROR_CODES.INTERNAL_ERROR,
+      'API example error',
+      { error: error?.message }
+    );
   }
 }
 
@@ -90,6 +94,10 @@ export async function POST(request) {
     });
     
   } catch (error) {
-    return errorHandler.handleError(error, 'API_EXAMPLE_POST_ERROR');
+    return createErrorResponse(
+      ERROR_CODES.INTERNAL_ERROR,
+      'API example post error',
+      { error: error?.message }
+    );
   }
 }

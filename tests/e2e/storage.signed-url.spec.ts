@@ -33,4 +33,17 @@ test.describe('Storage Signed URL', () => {
     const body = await res.json();
     expect(body).toBeTruthy();
   });
+
+  test('admin recibe 404 cuando el archivo no existe', async ({ request }) => {
+    const res = await request.post('/api/storage/signed-url', {
+      data: {
+        filePath: 'works/nonexistent-file-for-404-check.jpg',
+        bucket: 'works',
+        expiresIn: 3600,
+      },
+    });
+    expect(res.status()).toBe(404);
+    const json = await res.json();
+    expect(json?.error?.code).toBe('RESOURCE_NOT_FOUND');
+  });
 });

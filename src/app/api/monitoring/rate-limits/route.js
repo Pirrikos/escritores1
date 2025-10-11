@@ -4,7 +4,7 @@ import securityLogger, { SECURITY_EVENTS, SECURITY_LEVELS } from '@/lib/security
 import { getRateLimitStats, withRateLimit } from '@/lib/rateLimiter.js';
 import { ensureAdmin } from '@/lib/adminAuth.server.js';
 
-async function GET(request) {
+async function getHandler(request) {
   try {
     const admin = await ensureAdmin(request);
     if (!admin.ok) {
@@ -53,7 +53,8 @@ async function GET(request) {
 }
 
 // Aplicar rate limiting para endpoints de monitoreo
-const GET_WITH_RATE_LIMIT = withRateLimit('ADMIN')(GET);
+const GET_WITH_RATE_LIMIT = withRateLimit('ADMIN')(getHandler);
 
-export { GET_WITH_RATE_LIMIT as GET };
-export default withErrorHandling(GET);
+export async function GET(request) {
+  return withErrorHandling(GET_WITH_RATE_LIMIT)(request);
+}

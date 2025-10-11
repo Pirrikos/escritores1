@@ -19,10 +19,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'invalid_form' }, { status: 400 });
     }
 
-    const file = form.get('file');
+    const fileField = form.get('file');
     const path = form.get('path');
 
-    if (!file || !(file as any).arrayBuffer) {
+    if (!(fileField instanceof File)) {
       return NextResponse.json({ success: false, error: 'missing_file' }, { status: 400 });
     }
     if (typeof path !== 'string' || !path || !path.startsWith(`${user.id}/`)) {
@@ -34,9 +34,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'service_key_missing' }, { status: 500 });
     }
 
-    const arrayBuffer = await (file as File).arrayBuffer();
+    const arrayBuffer = await fileField.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const contentType = (file as any).type || 'application/octet-stream';
+    const contentType = fileField.type || 'application/octet-stream';
 
     const { error } = await admin.storage
       .from('works')

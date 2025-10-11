@@ -114,8 +114,23 @@ function WorkByChaptersContent() {
 
       const workIds = Array.from(new Set((chRows || []).map((c) => c.work_id))).filter(Boolean);
 
+      // Si no hay capítulos (obras con 0 capítulos), aún así listar todas las obras del autor
       if (workIds.length === 0) {
-        setAvailableWorks([]);
+        const { data: worksDataAll, error: worksErrorAll } = await supabase
+          .from('works')
+          .select('id, title, created_at')
+          .eq('author_id', sessionUserId)
+          .order('created_at', { ascending: false });
+        if (worksErrorAll) {
+          addToast({ type: 'error', message: `Error cargando obras: ${worksErrorAll.message}` });
+          setAvailableWorks([]);
+        } else {
+          const withCountsAll = (worksDataAll || []).map((w) => ({
+            ...w,
+            chapterCount: 0,
+          }));
+          setAvailableWorks(withCountsAll);
+        }
         return;
       }
 

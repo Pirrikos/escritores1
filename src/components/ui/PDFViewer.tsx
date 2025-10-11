@@ -53,11 +53,12 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose, in
   // Ref para el flag de carga en progreso
   const loadingInProgressRef = useRef<boolean>(false);
   
-  // Estado para almacenar el ArrayBuffer del PDF (evita objetos "detached" y re-renders innecesarios)
-  const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
+  // Estado para almacenar un Object URL del PDF (evita ArrayBuffer "detached")
+  const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   // Memoizar el objeto file para mantener igualdad referencial cuando no cambia
-  const fileObject = useMemo(() => (pdfData ? { data: pdfData } : null), [pdfData]);
+  const fileObject = useMemo(() => (pdfObjectUrl ? pdfObjectUrl : null), [pdfObjectUrl]);
 
   // Memoize the options object to prevent unnecessary reloads
   const documentOptions = useMemo(() => ({
@@ -95,10 +96,10 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose, in
     setLoading(false);
   }, []);
 
-  // Cargar PDF como ArrayBuffer en lugar de usar URL directa
+  // Cargar PDF y crear un Object URL en lugar de mantener ArrayBuffer
   useEffect(() => {
     // Evitar peticiones duplicadas para la misma URL
-    if (lastUrlRef.current === fileUrl && pdfData) {
+    if (lastUrlRef.current === fileUrl && pdfObjectUrl) {
       return;
     }
     
@@ -135,7 +136,15 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose, in
         })
         .then(arrayBuffer => {
           if (!abortController.signal.aborted && arrayBuffer) {
-            setPdfData(arrayBuffer);
+            // Crear Blob y Object URL para evitar problemas de ArrayBuffer "detached"
+            const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            // Revocar el Object URL anterior si existía
+            if (objectUrlRef.current) {
+              try { URL.revokeObjectURL(objectUrlRef.current); } catch {}
+            }
+            objectUrlRef.current = url;
+            setPdfObjectUrl(url);
             // Mantener loading hasta que el documento PDF se procese (onLoadSuccess)
             setError(null);
           }
@@ -157,6 +166,11 @@ const PDFViewer = React.memo(function PDFViewer({ fileUrl, fileName, onClose, in
         abortController.abort();
       }
       loadingInProgressRef.current = false;
+      // Revocar Object URL en desmontaje
+      if (objectUrlRef.current) {
+        try { URL.revokeObjectURL(objectUrlRef.current); } catch {}
+        objectUrlRef.current = null;
+      }
     };
   }, [fileUrl]);
 

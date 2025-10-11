@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import CoverRenderer from '@/components/ui/CoverRenderer';
@@ -43,6 +43,46 @@ export default function WorksCarousel({
 }: WorksCarouselProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isEmpty = works.length === 0;
+
+  // Resolver URL firmadas para portadas almacenadas en buckets privados
+  const [signedCoverMap, setSignedCoverMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const candidates = works.filter(
+          (w) => !!w.cover_url && !w.cover_url.startsWith('preview:') && !/^https?:\/\//.test(w.cover_url || '')
+        );
+        if (candidates.length === 0) return;
+        const entries: Array<[string, string]> = [];
+        for (const w of candidates) {
+          try {
+            const res = await fetch('/api/storage/signed-url', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ filePath: w.cover_url, bucket: 'works', expiresIn: 3600 }),
+            });
+            if (res.ok) {
+              const json = await res.json();
+              const url = json?.signedUrl as string | undefined;
+              if (url) entries.push([w.id, url]);
+            }
+          } catch {}
+        }
+        if (!cancelled && entries.length > 0) {
+          setSignedCoverMap((prev) => {
+            const next = { ...prev };
+            for (const [id, url] of entries) next[id] = url;
+            return next;
+          });
+        }
+      } catch {}
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [works]);
 
   const scrollLeft = () => {
     if (scrollContainerRef.current) {
@@ -162,11 +202,12 @@ export default function WorksCarousel({
                         ) : (
                           <div className="w-[180px] h-[270px] bg-gray-200 rounded overflow-hidden shadow-md">
                             <Image
-                              src={work.cover_url}
+                              src={signedCoverMap[work.id] || (work.cover_url as string)}
                               alt={`Portada de ${work.title}`}
                               width={180}
                               height={270}
                               className="w-full h-full object-cover"
+                              unoptimized
                             />
                           </div>
                         )

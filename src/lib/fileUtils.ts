@@ -67,9 +67,14 @@ export async function getSignedFileUrl(
     });
 
     if (!response.ok) {
-      let body: any = null;
+      type ErrorBody = {
+        error?: { message?: string; details?: unknown } | string;
+        message?: string;
+        details?: unknown;
+      };
+      let body: ErrorBody | null = null;
       try {
-        body = await response.json();
+        body = await response.json() as ErrorBody;
       } catch (parseError) {
         // Intentar leer como texto para tener contexto
         try {
@@ -80,13 +85,12 @@ export async function getSignedFileUrl(
       }
 
       const message = (
-        body?.error?.message ||
+        (typeof body?.error !== 'string' ? body?.error?.message : body.error) ||
         body?.message ||
-        (typeof body?.error === 'string' ? body.error : null) ||
         response.statusText ||
         'Error generando URL firmada'
       );
-      const details = body?.error?.details || body?.details || null;
+      const details = (typeof body?.error !== 'string' ? body?.error?.details : undefined) || body?.details || null;
       console.error('❌ getSignedFileUrl - Error del servidor:', { status: response.status, message, details });
       throw new Error(message);
     }

@@ -15,16 +15,10 @@ type ContentViewRow = {
   created_at: string;
 };
 
-type LikeRow = {
-  user_id: string;
-  target_type: 'work' | 'chapter' | 'post';
-  target_id: string;
-  created_at: string;
-};
-
+type ProfileRow = { id: string; display_name: string | null };
 type Profile = { id: string; display_name: string | null };
+type WorkRow = { slug: string; title: string; cover_url?: string | null; profiles?: { display_name: string | null } | null };
 type Work = { id: string; title: string; slug?: string | null; cover_url?: string | null; author_name?: string | null };
-type Chapter = { id: string; title: string; slug?: string | null };
 
 type FeedItem = {
   userName: string;
@@ -74,7 +68,7 @@ export default function SocialNowFeed({ className = '' }: { className?: string }
 
         // Obtener usuario actual y filtrar su propia actividad
         const { data: { user: me } } = await supabase.auth.getUser();
-        const allViewRows: ContentViewRow[] = (views || []) as any;
+        const allViewRows: ContentViewRow[] = Array.isArray(views) ? (views as ContentViewRow[]) : [];
         const viewRows: ContentViewRow[] = (allViewRows || []).filter(v => v.user_id && v.user_id !== me?.id);
 
         // 2) Quedarnos SOLO con obras y deduplicar por usuario (última obra vista)
@@ -93,17 +87,17 @@ export default function SocialNowFeed({ className = '' }: { className?: string }
           return;
         }
         const userIds = Array.from(new Set(dedupRows.map(v => v.user_id))).filter(Boolean);
-        let profilesRows: any[] = [];
+        let profilesRows: ProfileRow[] = [];
         if (userIds.length > 0) {
           const { data: pr, error: profilesErr } = await supabase
             .from('profiles')
             .select('id, display_name')
             .in('id', userIds);
           if (profilesErr) throw profilesErr;
-          profilesRows = pr || [];
+          profilesRows = (pr as ProfileRow[]) || [];
         }
         const profileMap = new Map<string, Profile>();
-        (profilesRows || []).forEach((p: any) => profileMap.set(p.id, { id: p.id, display_name: p.display_name }));
+        (profilesRows || []).forEach((p) => profileMap.set(p.id, { id: p.id, display_name: p.display_name }));
         // 4) Cargar títulos por slug de obras
         const workSlugs = Array.from(new Set(dedupRows.map(v => v.content_slug)));
         const { data: works } = workSlugs.length > 0
@@ -111,15 +105,15 @@ export default function SocialNowFeed({ className = '' }: { className?: string }
               .from('works')
               .select('slug, title, cover_url, profiles:profiles!works_author_id_fkey(display_name)')
               .in('slug', workSlugs)
-          : { data: [] as any[] };
+          : { data: [] as WorkRow[] };
         const workMap = new Map<string, Work>();
-        (works || []).forEach((w: any) =>
+        (works as WorkRow[] || []).forEach((w) =>
           workMap.set(w.slug, {
             id: w.slug,
             title: w.title,
             slug: w.slug,
             cover_url: w.cover_url || null,
-            author_name: w?.profiles?.display_name || null,
+            author_name: w && w.profiles ? w.profiles.display_name : null,
           })
         );
 
@@ -144,7 +138,7 @@ export default function SocialNowFeed({ className = '' }: { className?: string }
         });
 
         if (mounted) setItems(built);
-      } catch (err) {
+      } catch {
         // Silenciar errores del Rincón social en consola
         if (mounted) setItems([]);
       } finally {
@@ -201,16 +195,37 @@ export default function SocialNowFeed({ className = '' }: { className?: string }
                     className="rounded-md border border-slate-200 object-cover"
                   />
                 ) : (
-                  <CoverRenderer
-                    mode={meta.mode === 'template' ? 'template' : 'auto'}
-                    templateId={meta.mode === 'template' ? (meta.templateId as any) : 'template-1'}
-                    paletteId={meta.mode === 'template' ? (meta.paletteId as any) : 'marino'}
-                    title={meta.mode === 'template' ? meta.title : it.targetTitle}
-                    author={meta.mode === 'template' ? meta.author : (it.authorName || 'Autor')}
-                    width={80}
-                    height={120}
-                    className="rounded-md border border-slate-200"
-                  />
+                  (() => {
+                    if (meta.mode === 'template') {
+                      const validTemplateIds = ['template-1','template-2','template-3','template-4','template-5','template-6','template-7','template-8'] as const;
+                      const validPaletteIds = ['marino','rojo','negro','verde','purpura'] as const;
+                      const safeTemplateId = (validTemplateIds as readonly string[]).includes(meta.templateId) ? meta.templateId as typeof validTemplateIds[number] : 'template-1';
+                      const safePaletteId = (validPaletteIds as readonly string[]).includes(meta.paletteId) ? meta.paletteId as typeof validPaletteIds[number] : 'marino';
+                      return (
+                        <CoverRenderer
+                          mode="template"
+                          templateId={safeTemplateId}
+                          paletteId={safePaletteId}
+                          title={meta.title}
+                          author={meta.author}
+                          width={80}
+                          height={120}
+                          className="rounded-md border border-slate-200"
+                        />
+                      );
+                    }
+                    return (
+                      <CoverRenderer
+                        mode="auto"
+                        title={it.targetTitle}
+                        author={it.authorName || 'Autor'}
+                        paletteId="marino"
+                        width={80}
+                        height={120}
+                        className="rounded-md border border-slate-200"
+                      />
+                    );
+                  })()
                 )}
               </Link>
               <div className="min-w-[12rem]">

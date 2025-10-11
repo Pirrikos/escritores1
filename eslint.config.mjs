@@ -21,6 +21,12 @@ const eslintConfig = [
     ],
   },
   {
+    // Ajuste global: convertir `no-explicit-any` en warning para facilitar la migración
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
+    },
+  },
+  {
     files: ["scripts/**/*.js"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",

@@ -1,9 +1,10 @@
+import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { withErrorHandling, createErrorResponse, handleAuthError, ERROR_CODES } from '@/lib/errorHandler.js';
-import { getErrorStatistics } from '@/lib/monitoring.js';
+import { getErrorStatistics, clearErrorCache } from '@/lib/monitoring.js';
 import { ensureAdmin } from '@/lib/adminAuth.server.js';
 
-async function GET(request) {
+async function getHandler(request: NextRequest): Promise<Response> {
   try {
     const admin = await ensureAdmin(request);
     if (!admin.ok) {
@@ -16,17 +17,19 @@ async function GET(request) {
       );
     }
 
-    // Obtener estadísticas de errores
     const stats = getErrorStatistics();
-    
-    // Obtener errores persistidos (si existen)
-    // Persisted errors could be loaded from DB in future
+
     try {
-      // Aquí se podría consultar una tabla de errores en Supabase
-      // Por ahora retornamos las estadísticas del cache en memoria
+      // Placeholder para errores persistidos en futuro
     } catch (error) {
       console.warn('No se pudieron obtener errores persistidos:', error);
     }
+
+    const recommendationsInput = {
+      lastHour: stats.lastHour,
+      bySeverity: (stats.bySeverity ?? {}) as Record<string, number>,
+      byType: (stats.byType ?? {}) as Record<string, number>,
+    };
 
     return NextResponse.json({
       success: true,
@@ -36,12 +39,11 @@ async function GET(request) {
           status: stats.lastHour > 10 ? 'critical' : stats.lastHour > 5 ? 'warning' : 'healthy',
           uptime: process.uptime(),
           memoryUsage: process.memoryUsage(),
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         },
-        recommendations: generateRecommendations(stats)
-      }
+        recommendations: generateRecommendations(recommendationsInput),
+      },
     });
-
   } catch (error) {
     console.error('Error en endpoint de monitoreo:', error);
     return createErrorResponse(
@@ -51,7 +53,7 @@ async function GET(request) {
   }
 }
 
-async function POST(request) {
+async function postHandler(request: NextRequest): Promise<Response> {
   try {
     const admin = await ensureAdmin(request);
     if (!admin.ok) {
@@ -67,21 +69,17 @@ async function POST(request) {
     const { action } = await request.json();
 
     if (action === 'clear_cache') {
-      // Limpiar cache de errores
-      const { clearErrorCache } = await import('@/lib/monitoring');
       clearErrorCache();
-
       return NextResponse.json({
         success: true,
-        message: 'Cache de errores limpiado exitosamente'
+        message: 'Cache de errores limpiado exitosamente',
       });
     }
 
     return createErrorResponse(
-      ERROR_CODES.BAD_REQUEST,
+      ERROR_CODES.INVALID_INPUT,
       'Acción no válida'
     );
-
   } catch (error) {
     console.error('Error en POST de monitoreo:', error);
     return createErrorResponse(
@@ -91,38 +89,42 @@ async function POST(request) {
   }
 }
 
-function generateRecommendations(stats) {
-  const recommendations = [];
+function generateRecommendations(stats: {
+  lastHour: number;
+  bySeverity?: Record<string, number>;
+  byType?: Record<string, number>;
+}): Array<{ priority: 'low' | 'medium' | 'high' | 'critical'; message: string; action: string }> {
+  const recommendations: Array<{ priority: 'low' | 'medium' | 'high' | 'critical'; message: string; action: string }> = [];
 
   if (stats.lastHour > 10) {
     recommendations.push({
       priority: 'high',
       message: 'Alto número de errores en la última hora',
-      action: 'Revisar logs del sistema y verificar estado de servicios'
+      action: 'Revisar logs del sistema y verificar estado de servicios',
     });
   }
 
-  if (stats.bySeverity?.critical > 0) {
+  if ((stats.bySeverity?.critical ?? 0) > 0) {
     recommendations.push({
       priority: 'critical',
       message: 'Se detectaron errores críticos',
-      action: 'Investigar inmediatamente y contactar al equipo de desarrollo'
+      action: 'Investigar inmediatamente y contactar al equipo de desarrollo',
     });
   }
 
-  if (stats.byType?.database_connection > 0) {
+  if ((stats.byType || {})['database_connection'] > 0) {
     recommendations.push({
       priority: 'high',
       message: 'Problemas de conexión a la base de datos detectados',
-      action: 'Verificar estado de Supabase y conexiones de red'
+      action: 'Verificar estado de Supabase y conexiones de red',
     });
   }
 
-  if (stats.byType?.rate_limit_exceeded > 5) {
+  if ((stats.byType || {})['rate_limit_exceeded'] > 5) {
     recommendations.push({
       priority: 'medium',
       message: 'Múltiples violaciones de rate limiting',
-      action: 'Considerar ajustar límites o implementar medidas anti-bot'
+      action: 'Considerar ajustar límites o implementar medidas anti-bot',
     });
   }
 
@@ -130,12 +132,17 @@ function generateRecommendations(stats) {
     recommendations.push({
       priority: 'low',
       message: 'Sistema funcionando correctamente',
-      action: 'Continuar monitoreando'
+      action: 'Continuar monitoreando',
     });
   }
 
   return recommendations;
 }
 
-export { GET, POST };
-export default withErrorHandling(GET);
+export async function GET(request: NextRequest): Promise<Response> {
+  return withErrorHandling(getHandler)(request);
+}
+
+export async function POST(request: NextRequest): Promise<Response> {
+  return withErrorHandling(postHandler)(request);
+}

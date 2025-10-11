@@ -300,7 +300,7 @@ function UploadWorksContent() {
         .from('works')
         .select('slug')
         .eq('slug', slug)
-        .single();
+        .maybeSingle();
 
       if (existingWork) {
         slug = `${slug}-${Date.now()}`;

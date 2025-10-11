@@ -16,7 +16,7 @@ import {
   createErrorResponse,
   ERROR_CODES 
 } from "@/lib/errorHandler.js";
-import { withRateLimit, createIPRateLimiter } from "@/lib/rateLimiter.js";
+import { createIPRateLimiter } from "@/lib/rateLimiter.js";
 import productionLogger, { LOG_CATEGORIES } from "@/lib/productionLogger.js";
 import { monitorDatabaseOperation } from "@/lib/performanceMonitor.js";
 
@@ -340,6 +340,3 @@ export async function POST(req) {
 
   })(req);
 }
-
-// Aplicar rate limiting específico para creación de posts
-export const POST_WITH_RATE_LIMIT = withRateLimit('POST_CREATION')(POST);

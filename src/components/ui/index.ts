@@ -33,3 +33,7 @@ export { default as AppHeader } from './AppHeader';
 
 // Utility functions
 export { cn } from '../../lib/utils';
+
+// Pagination
+export { default as Pagination } from './Pagination';
+export type { PaginationProps } from './Pagination';

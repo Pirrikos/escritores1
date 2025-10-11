@@ -11,6 +11,7 @@ import FollowButton from '@/components/ui/FollowButton';
 import { ToastProvider } from '@/contexts/ToastContext';
 import ToastContainer from '@/components/ui/ToastContainer';
 import { generateSlug } from '@/lib/slugUtils';
+import { logPdfView, normalizeBucketAndPath } from '@/lib/activityLogger';
 
 interface Profile {
   id: string;
@@ -214,9 +215,18 @@ export default function UsuarioPublicacionesPage({ params }: { params: Promise<{
         .limit(1000);
       if (!chErr && Array.isArray(chRows)) {
         const map: Record<string, Array<{ id: string; title: string; chapter_number: number; slug?: string; file_url?: string; file_type?: string }>> = {};
+        const seen: Record<string, Set<string>> = {};
         for (const row of chRows) {
           const wid = (row as any).work_id;
           if (!wid) continue;
+          const slug = String((row as any).slug || '').toLowerCase();
+          const num = String((row as any).chapter_number ?? '');
+          const titleNorm = String((row as any).title || '').trim().toLowerCase();
+          const key = [slug, num, titleNorm].filter(Boolean).join('|');
+          const seenSet = seen[wid] || new Set<string>();
+          if (key && seenSet.has(key)) continue;
+          seenSet.add(key);
+          seen[wid] = seenSet;
           const list = map[wid] || [];
           list.push({ id: (row as any).id, title: (row as any).title, chapter_number: (row as any).chapter_number, slug: (row as any).slug, file_url: (row as any).file_url, file_type: (row as any).file_type });
           map[wid] = list;
@@ -231,6 +241,7 @@ export default function UsuarioPublicacionesPage({ params }: { params: Promise<{
       let effectivePath = filePath;
       let effectiveType = fileType;
       let effectiveTitle = title;
+      let resolvedSlug = slug;
       if (!effectivePath && slug) {
         try {
           const { data: ch, error } = await supabase
@@ -247,8 +258,23 @@ export default function UsuarioPublicacionesPage({ params }: { params: Promise<{
           }
         } catch {}
       }
+      // Intentar resolver slug real desde la BD si falta pero tenemos la ruta
+      if (!resolvedSlug && effectivePath) {
+        try {
+          const { data: ch2 } = await supabase
+            .from('chapters')
+            .select('slug')
+            .eq('file_url', effectivePath)
+            .eq('status', 'published')
+            .limit(1)
+            .single();
+          if (ch2?.slug) {
+            resolvedSlug = ch2.slug as string;
+          }
+        } catch {}
+      }
       if (!effectivePath) {
-        window.location.href = `/chapters/${slug || ''}?view=pdf`;
+        window.location.href = `/chapters/${resolvedSlug || ''}?view=pdf`;
         return;
       }
       const isPdf = (effectiveType && effectiveType.toLowerCase().includes('pdf')) || (effectivePath && effectivePath.toLowerCase().endsWith('.pdf'));
@@ -261,19 +287,60 @@ export default function UsuarioPublicacionesPage({ params }: { params: Promise<{
           });
           const signed = res.ok ? (await res.json())?.signedUrl : null;
           const urlToUse = signed || effectivePath;
-          setPdfUrl(urlToUse);
+          const norm = normalizeBucketAndPath(urlToUse, { bucket: 'chapters', path: effectivePath || urlToUse });
+          if (!resolvedSlug && norm.path) {
+            try {
+              const { data: ch3 } = await supabase
+                .from('chapters')
+                .select('slug')
+                .eq('file_url', norm.path)
+                .eq('status', 'published')
+                .limit(1)
+                .single();
+              if (ch3?.slug) {
+                resolvedSlug = ch3.slug as string;
+              }
+            } catch {}
+          }
+          // Descargar PDF como blob y usar object URL
+          let viewerUrl = urlToUse;
+          if (signed) {
+            try {
+              const pdfResp = await fetch(signed, { cache: 'no-store' });
+              const blob = await pdfResp.blob();
+              viewerUrl = URL.createObjectURL(blob);
+            } catch {}
+          }
+          setPdfUrl(viewerUrl);
           setCurrentTitle(effectiveTitle || 'Capítulo');
+          // Registrar capítulo sólo si tenemos slug de capítulo resuelto
+          await logPdfView({ contentType: 'chapter', contentSlug: resolvedSlug || null, urlOrPath: norm.path || effectivePath });
           setIsPDFViewerOpen(true);
           return;
         } catch {}
-        setPdfUrl(effectivePath);
+        const norm = normalizeBucketAndPath(effectivePath || '', { bucket: 'chapters', path: effectivePath || '' });
+        if (!resolvedSlug && norm.path) {
+          try {
+            const { data: ch3 } = await supabase
+              .from('chapters')
+              .select('slug')
+              .eq('file_url', norm.path)
+              .eq('status', 'published')
+              .limit(1)
+              .single();
+            if (ch3?.slug) {
+              resolvedSlug = ch3.slug as string;
+            }
+          } catch {}
+        }
+        // Sin URL firmada, no abrir visor para evitar errores de carga
         setCurrentTitle(effectiveTitle || 'Capítulo');
-        setIsPDFViewerOpen(true);
+        await logPdfView({ contentType: 'chapter', contentSlug: resolvedSlug || null, urlOrPath: effectivePath });
         return;
       }
       window.open(effectivePath, '_blank');
     } catch {
-      window.location.href = (filePath || `/chapters/${slug || ''}`);
+      window.location.href = (filePath || `/chapters/${resolvedSlug || slug || ''}`);
     }
   }, [supabase]);
 
@@ -366,33 +433,6 @@ export default function UsuarioPublicacionesPage({ params }: { params: Promise<{
               title={`Obras por capítulos de ${displayName}`} 
               description="Obras seriadas con capítulos publicados"
               className=""
-              renderItemFooter={(work) => {
-                const list = chaptersByWork[work.id] || [];
-                return (
-                  <div className="mt-2 bg-slate-50 border border-slate-200 rounded-md p-2">
-                    <div className="text-xs font-semibold text-slate-700 mb-1">Capítulos</div>
-                    {list.length === 0 ? (
-                      <div className="text-xs text-slate-500">No hay capítulos publicados</div>
-                    ) : (
-                      <ul className="space-y-1">
-                        {list.map((ch) => (
-                          <li key={ch.id} className="flex items-center justify-between">
-                            <span className="text-xs text-slate-700">#{ch.chapter_number} — {ch.title}</span>
-                            <button
-                              type="button"
-                              onClick={() => openChapterFile(ch.file_url, ch.slug || generateSlug(ch.title), ch.file_type, ch.title)}
-                              className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline disabled:text-slate-400"
-                              title={ch.file_url ? (ch.file_type === 'application/pdf' ? 'Abrir PDF' : 'Abrir archivo del capítulo') : 'Abrir capítulo'}
-                            >
-                              Ver
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                );
-              }}
             />
 
             <ChaptersCarousel 
@@ -407,7 +447,15 @@ export default function UsuarioPublicacionesPage({ params }: { params: Promise<{
             <PDFViewer
               fileUrl={pdfUrl}
               fileName={currentTitle || 'Documento PDF'}
-              onClose={() => setIsPDFViewerOpen(false)}
+              onClose={() => {
+                try {
+                  if (pdfUrl && pdfUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(pdfUrl);
+                  }
+                } catch {}
+                setPdfUrl(null);
+                setIsPDFViewerOpen(false);
+              }}
             />
           )}
         </div>

@@ -26,14 +26,20 @@ export async function POST(req: Request) {
     }
 
     const user = userData.user;
-    const meta = user.user_metadata || {} as Record<string, any>;
-    const fullNameRaw: string | null = (meta.full_name as string) || (meta.name as string) || null;
-    const composedName: string | null = ((meta.given_name || '') + ' ' + (meta.family_name || '')).trim() || null;
+    const meta = (user.user_metadata ?? {}) as Partial<{
+      full_name: string;
+      name: string;
+      given_name: string;
+      family_name: string;
+      avatar_url: string;
+    }>;
+    const fullNameRaw: string | null = meta.full_name || meta.name || null;
+    const composedName: string | null = (`${meta.given_name ?? ''} ${meta.family_name ?? ''}`).trim() || null;
     const fullName: string | null = (fullNameRaw && fullNameRaw.trim().length > 0) 
       ? fullNameRaw.trim() 
       : (composedName && composedName.trim().length > 0 ? composedName.trim() : null);
     const emailLocal = user.email ? user.email.split('@')[0] : null;
-    const avatarUrl: string | null = (meta.avatar_url as string) || null;
+    const avatarUrl: string | null = meta.avatar_url || null;
 
     // Read current profile
     const { data: profile, error: readErr } = await supabase
@@ -56,7 +62,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, updated: false, display_name: currentName, avatar_url: profile?.avatar_url ?? null });
     }
 
-    const updatePayload: Record<string, any> = { id: user.id };
+    const updatePayload: { id: string; display_name?: string; avatar_url?: string | null } = { id: user.id };
     if (shouldUpdateName && desiredName) updatePayload.display_name = desiredName;
     if (shouldUpdateAvatar) updatePayload.avatar_url = desiredAvatar;
 

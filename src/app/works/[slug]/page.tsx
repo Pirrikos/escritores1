@@ -14,6 +14,7 @@ import { generateSlug } from '@/lib/slugUtils';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 const PDFViewer = dynamic(() => import('@/components/ui/PDFViewer'), { ssr: false });
+import { logPdfView } from '@/lib/activityLogger';
 
 interface Work {
   id: string;
@@ -22,6 +23,7 @@ interface Work {
   author_id: string;
   created_at: string;
   updated_at: string;
+  slug?: string;
   cover_url?: string;
   isbn?: string;
   file_url?: string;
@@ -80,6 +82,11 @@ function WorkDetailPageContent({
   const [isPDFViewerOpen, setIsPDFViewerOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [currentTitle, setCurrentTitle] = useState<string | null>(null);
+  // Aviso de lectura activa eliminado (se usa sólo lista manual)
+  // Estado para lista de lectura manual
+  const [isSaved, setIsSaved] = useState(false);
+  const [checkingSaved, setCheckingSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   // Declarar la función antes del useEffect para evitar TDZ
   const loadWorkBySlug = useCallback(async (workSlug: string) => {
     try {
@@ -96,6 +103,7 @@ function WorkDetailPageContent({
           author_id,
           created_at,
           updated_at,
+          slug,
           cover_url,
           isbn,
           file_url,
@@ -126,7 +134,10 @@ function WorkDetailPageContent({
         profiles: normalizeProfile(row.profiles)
       }));
 
-      const foundWork = normalizedWorks.find((w) => generateSlug(w.title) === workSlug);
+      const foundWork = normalizedWorks.find((w) => {
+        const candidate = (typeof w.slug === 'string' && w.slug) ? w.slug : generateSlug(w.title);
+        return candidate === workSlug;
+      });
 
       if (!foundWork) {
         setError('Obra no encontrada');
@@ -189,6 +200,32 @@ function WorkDetailPageContent({
     }
   }, [work?.id, loadPublishedChaptersForWork]);
 
+  // Comprobar si la obra ya está guardada en Mis Lecturas (lista manual)
+  useEffect(() => {
+    const checkSaved = async () => {
+      try {
+        if (!slug) return;
+        setCheckingSaved(true);
+        const res = await fetch('/api/reading-list', { method: 'GET', credentials: 'include' });
+        if (!res.ok) {
+          setIsSaved(false);
+          return;
+        }
+        const json = await res.json();
+        const items = Array.isArray(json?.data) ? json.data : [];
+        const exists = items.some((it: any) => it?.type === 'work' && it?.slug === slug);
+        setIsSaved(!!exists);
+      } catch (e) {
+        setIsSaved(false);
+      } finally {
+        setCheckingSaved(false);
+      }
+    };
+    void checkSaved();
+  }, [slug]);
+
+  // Lógica antigua de aviso eliminada
+
   // Abrir archivo de capítulo con visor PDF integrado
   const openChapterFile = useCallback(async (filePath?: string, slug?: string, fileType?: string, title?: string) => {
     try {
@@ -231,15 +268,25 @@ function WorkDetailPageContent({
           });
           const signed = res.ok ? (await res.json())?.signedUrl : null;
           const urlToUse = signed || effectivePath;
-          setPdfUrl(urlToUse);
+          // Descargar como blob y usar object URL para evitar net::ERR_ABORTED
+          let viewerUrl = urlToUse;
+          if (signed) {
+            try {
+              const pdfResp = await fetch(signed, { cache: 'no-store' });
+              const blob = await pdfResp.blob();
+              viewerUrl = URL.createObjectURL(blob);
+            } catch {}
+          }
+          setPdfUrl(viewerUrl);
           setCurrentTitle(effectiveTitle || 'Capítulo');
+          await logPdfView({ contentType: 'chapter', contentSlug: slug, urlOrPath: effectivePath });
           setIsPDFViewerOpen(true);
           return;
         } catch (e) {
           console.warn('No se pudo firmar la URL, se usará la ruta por defecto.', e);
-          setPdfUrl(effectivePath);
+          // Sin URL firmada, no abrir visor para evitar errores de carga
           setCurrentTitle(effectiveTitle || 'Capítulo');
-          setIsPDFViewerOpen(true);
+          await logPdfView({ contentType: 'chapter', contentSlug: slug, urlOrPath: effectivePath });
           return;
         }
       }
@@ -286,7 +333,15 @@ function WorkDetailPageContent({
           <PDFViewer
             fileUrl={pdfUrl}
             fileName={currentTitle || work.title}
-            onClose={() => setIsPDFViewerOpen(false)}
+            onClose={() => {
+              try {
+                if (pdfUrl && pdfUrl.startsWith('blob:')) {
+                  URL.revokeObjectURL(pdfUrl);
+                }
+              } catch {}
+              setPdfUrl(null);
+              setIsPDFViewerOpen(false);
+            }}
           />
         </div>
       )}
@@ -309,6 +364,7 @@ function WorkDetailPageContent({
 
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Aviso de lectura activa eliminado */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="p-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -350,15 +406,7 @@ function WorkDetailPageContent({
                       })()
                     ) : (
                       // Portada personalizada subida
-                      <div className="w-full h-full bg-gray-200 rounded-lg overflow-hidden shadow-lg">
-                        <Image 
-                          src={work.cover_url}
-                          alt={`Portada de ${work.title}`}
-                          fill
-                          sizes="(max-width: 640px) 100vw, 400px"
-                          className="object-cover"
-                        />
-                      </div>
+                      <SignedCoverImage coverPath={work.cover_url} title={work.title} />
                     )
                   ) : (
                     <CoverRenderer
@@ -481,6 +529,80 @@ function WorkDetailPageContent({
                         />
                       );
                     })()}
+
+                    {/* Guardar a Mis Lecturas (lista manual) */}
+                    {checkingSaved ? (
+                      <div className="flex-1 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-200">
+                        Comprobando estado de Mis Lecturas…
+                      </div>
+                    ) : isSaved ? (
+                      <div className="flex-1 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 flex items-center justify-between gap-3">
+                        <span className="text-sm text-indigo-700 dark:text-indigo-300">
+                          Ya estás leyendo esta obra.
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href="/mis-lecturas"
+                            className="inline-flex items-center px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-sm"
+                          >
+                            Ir a Mis Lecturas
+                          </Link>
+                          <button
+                            className="inline-flex items-center px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-sm"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/reading-list?workSlug=${encodeURIComponent(slug)}`, {
+                                  method: 'DELETE',
+                                  credentials: 'include',
+                                });
+                                if (res.ok) {
+                                  setIsSaved(false);
+                                  addToast({ type: 'success', message: 'Se quitó de Mis Lecturas.' });
+                                } else {
+                                  addToast({ type: 'error', message: 'No se pudo quitar de Mis Lecturas.' });
+                                }
+                              } catch {
+                                addToast({ type: 'error', message: 'Error de conexión al quitar.' });
+                              }
+                            }}
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700 hover:bg-green-100 disabled:opacity-50"
+                        disabled={saving}
+                        onClick={async () => {
+                          try {
+                            setSaving(true);
+                            const resp = await fetch('/api/reading-list', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ workSlug: slug }),
+                              credentials: 'include'
+                            });
+                            if (resp.status === 401) {
+                              addToast({ type: 'error', message: 'Inicia sesión para guardar en Mis Lecturas.' });
+                              return;
+                            }
+                            if (!resp.ok) {
+                              addToast({ type: 'error', message: 'No se pudo guardar en Mis Lecturas.' });
+                              return;
+                            }
+                            setIsSaved(true);
+                            addToast({ type: 'success', message: 'Guardado en Mis Lecturas.' });
+                          } catch (e) {
+                            addToast({ type: 'error', message: 'Error al guardar en Mis Lecturas.' });
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                      >
+                        Guardar a Mis Lecturas
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -543,6 +665,54 @@ function WorkDetailPageContent({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SignedCoverImage({ coverPath, title }: { coverPath: string; title: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        if (!coverPath || /^https?:\/\//.test(coverPath)) {
+          if (!cancelled) setSrc(coverPath || null);
+          return;
+        }
+        const res = await fetch('/api/storage/signed-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: coverPath, bucket: 'works', expiresIn: 3600 }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const url = json?.signedUrl as string | undefined;
+          if (!cancelled) setSrc(url || null);
+        }
+      } catch {
+        if (!cancelled) setSrc(null);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [coverPath]);
+  if (!src) {
+    return (
+      <div className="w-full h-full bg-gray-200 rounded-lg overflow-hidden shadow-lg" />
+    );
+  }
+  return (
+    <div className="w-full h-full bg-gray-200 rounded-lg overflow-hidden shadow-lg">
+      <Image
+        src={src}
+        alt={`Portada de ${title}`}
+        fill
+        sizes="(max-width: 640px) 100vw, 400px"
+        className="object-cover"
+        unoptimized
+      />
     </div>
   );
 }

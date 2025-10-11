@@ -1,37 +1,32 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { withRateLimit } from '@/lib/rateLimiter.js';
 import { createServerSupabaseClient } from '@/lib/supabaseServer.js';
+import { ViewPdfSchema } from '@/app/api/activity/schemas';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Crea un registro de vista de PDF para obras/capítulos
-export async function POST(req: Request) {
+async function POST(req: Request) {
   try {
     const supabase = await createServerSupabaseClient();
 
     // Intentar parsear el JSON con manejo de errores explícito
-    let body: any = null;
+    let rawBody: unknown = null;
     try {
-      body = await req.json();
+      rawBody = await req.json();
     } catch (parseErr) {
       console.error('view-pdf: invalid JSON body', parseErr);
       return NextResponse.json({ success: false, error: 'invalid_payload' }, { status: 400 });
     }
 
-    const {
-      contentType,
-      contentSlug,
-      bucket,
-      filePath,
-    } = body || {};
-
-    // Validaciones básicas
-    if (!contentType || !['work', 'chapter'].includes(contentType)) {
-      return NextResponse.json({ success: false, error: 'invalid_content_type' }, { status: 400 });
+    // Validación estricta con zod
+    const parsed = ViewPdfSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: 'invalid_payload', details: parsed.error.flatten() }, { status: 400 });
     }
-    if (!contentSlug || typeof contentSlug !== 'string') {
-      return NextResponse.json({ success: false, error: 'invalid_slug' }, { status: 400 });
-    }
+    const { contentType, contentSlug, bucket, filePath } = parsed.data;
 
     // Normalización defensiva de bucket y filePath
     const safeBucket = typeof bucket === 'string' && bucket.trim() !== '' ? bucket.trim() : null;
@@ -68,3 +63,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: 'server_error' }, { status: 500 });
   }
 }
+
+// Aplicar rate limiting a este endpoint
+const rateLimitedPOST = withRateLimit('API_GENERAL')(POST);
+export { rateLimitedPOST as POST };

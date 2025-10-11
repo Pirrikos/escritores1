@@ -11,7 +11,20 @@ export async function POST(request) {
     // Intentar obtener sesión de usuario (no requiere rol admin). Si no hay usuario, se permite continuar
     // siempre que el archivo pertenezca a contenido publicado.
     const supabaseRoute = await createServerSupabaseClient();
-    const { data: { user }, error: authErr } = await supabaseRoute.auth.getUser();
+    // Obtener usuario con fallback desde cookie si fuese necesario
+    let { data: { user }, error: authErr } = await supabaseRoute.auth.getUser();
+    if ((!user || authErr) && req?.headers?.get('cookie')) {
+      try {
+        const cookieHeader = req.headers.get('cookie') || '';
+        const tokenMatch = cookieHeader.match(/(?:^|;\s*)(sb-access-token|sb:token)=([^;]+)/i);
+        const jwt = tokenMatch?.[2];
+        if (jwt) {
+          const result = await supabaseRoute.auth.getUser(jwt);
+          user = result.data?.user || user;
+          authErr = result.error || undefined;
+        }
+      } catch {}
+    }
     const isAuthenticated = !authErr && !!user;
 
     // Leer cuerpo solo para usuarios autorizados
@@ -70,8 +83,8 @@ export async function POST(request) {
         // Si no se encuentra en chapters, buscar en works
         const { data: workData } = await supabaseForQuery
           .from('works')
-          .select('file_url, cover_image_url')
-          .or(`file_url.eq.${filePath},cover_image_url.eq.${filePath}`)
+          .select('file_url, cover_url')
+          .or(`file_url.eq.${filePath},cover_url.eq.${filePath}`)
           .limit(1);
 
         if (workData && workData.length > 0) {
@@ -118,7 +131,7 @@ export async function POST(request) {
           const { data: w } = await supabaseForQuery
             .from('works')
             .select('id, status')
-            .or(`file_url.eq.${filePath},cover_image_url.eq.${filePath},cover_url.eq.${filePath}`)
+            .or(`file_url.eq.${filePath},cover_url.eq.${filePath}`)
             .limit(1);
           isPublished = Array.isArray(w) && w[0]?.status === 'published';
         }

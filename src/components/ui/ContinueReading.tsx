@@ -5,7 +5,9 @@ import dynamic from "next/dynamic";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import Link from "next/link";
 import { Icons, Icon } from "./Icon";
+import { useToast } from "../../contexts/ToastContext";
 import { getSignedFileUrl } from "@/lib/fileUtils";
+import { logPdfView } from "@/lib/activityLogger";
 
 type ContentViewRow = {
   user_id: string;
@@ -47,6 +49,7 @@ export default function ContinueReading({ className = "" }: { className?: string
   const [isPDFViewerOpen, setIsPDFViewerOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [initialPage, setInitialPage] = useState<number | undefined>(undefined);
+  const { addToast } = useToast();
 
   // Importación dinámica del visor PDF para evitar problemas de SSR
   const PDFViewer = useMemo(() => dynamic(() => import("./PDFViewer"), {
@@ -262,33 +265,40 @@ export default function ContinueReading({ className = "" }: { className?: string
       try {
         const signed = await getSignedFileUrl(item.filePath, 3600, item.bucket || undefined);
         const urlToUse = signed || item.filePath;
-        if (urlToUse) {
-          setPdfUrl(urlToUse);
-          setInitialPage(ip);
-          try { console.info('[ContinueReading] abrir visor', { initialPage: ip, url: urlToUse, slug: item.href.split('/').pop() }); } catch {}
-          setIsPDFViewerOpen(true);
-          return;
-        }
+        // Descargar como blob y usar object URL para evitar net::ERR_ABORTED
+        let viewerUrl = urlToUse;
+        try {
+          const pdfResp = await fetch(urlToUse, { cache: 'no-store' });
+          const blob = await pdfResp.blob();
+          viewerUrl = URL.createObjectURL(blob);
+        } catch {}
+        setPdfUrl(viewerUrl);
+        setInitialPage(ip);
+        console.info('[ContinueReading] abrir visor', { initialPage: ip, url: urlToUse, slug: item.href.split('/').pop() });
+        await logPdfView({ contentType: item.href.startsWith('/works/') ? 'work' : 'chapter', contentSlug: item.href.split('/').pop(), urlOrPath: urlToUse, bucketOverride: item.bucket || null });
+        setIsPDFViewerOpen(true);
+        return;
       } catch (e) {
-        console.warn("No se pudo firmar la URL, se usará la ruta por defecto.", e);
-        if (item.filePath) {
-          setPdfUrl(item.filePath);
-          setInitialPage(ip);
-          try { console.info('[ContinueReading] abrir visor (fallback sin firma)', { initialPage: ip, url: item.filePath }); } catch {}
-          setIsPDFViewerOpen(true);
-          return;
+        const msg = (e instanceof Error ? e.message : 'Error generando URL firmada');
+        const low = msg.toLowerCase();
+        // No abrir con ruta directa: evitar 404/ERR_ABORTED por rutas no servidas por Next
+        if (low.includes('no encontrado') || low.includes('404')) {
+          addToast({ type: 'error', message: 'Archivo no encontrado en almacenamiento.' });
+        } else {
+          addToast({ type: 'error', message: 'No se pudo firmar el PDF.' });
         }
+        return;
       }
     }
-    // Fallback: navegar a la página del contenido para continuar desde allí.
-    window.location.href = item.href;
+    // Sin redirección: si no hay archivo, mostrar un aviso y permanecer en la página actual
+    addToast({ type: 'error', message: 'No hay archivo disponible para continuar.' });
   };
 
   if (loading) {
     return (
       <div className={`rounded-2xl border border-slate-200 bg-white/70 p-4 ${className}`}>
         <div className="flex items-center gap-2">
-          <Icon path={Icons.loader} size="sm" className="animate-spin text-slate-500" />
+          <Icon path={Icons.search} size="sm" className="animate-spin text-slate-500" />
           <span className="text-sm text-slate-600">Cargando lecturas en curso…</span>
         </div>
       </div>
@@ -331,7 +341,15 @@ export default function ContinueReading({ className = "" }: { className?: string
         <PDFViewer
           fileUrl={pdfUrl}
           fileName={item.title}
-          onClose={() => setIsPDFViewerOpen(false)}
+          onClose={() => {
+            try {
+              if (pdfUrl && pdfUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(pdfUrl);
+              }
+            } catch {}
+            setPdfUrl(null);
+            setIsPDFViewerOpen(false);
+          }}
           initialPage={initialPage}
           onProgress={async (page, totalPages) => {
             try {

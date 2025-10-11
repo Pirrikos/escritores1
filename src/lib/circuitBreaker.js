@@ -4,7 +4,7 @@
  */
 
 import { securityLogger } from './securityLogger.js';
-import { monitoring } from './monitoring.js';
+import * as monitoring from './monitoring.js';
 
 // Circuit breaker states
 const CIRCUIT_STATES = {

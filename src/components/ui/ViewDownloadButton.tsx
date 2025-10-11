@@ -219,9 +219,13 @@ export function ViewDownloadButton({
       }
     }
 
-    // Si aún no tenemos URL, intentar usar filePath directamente para vista previa
-    if (!urlToUse && filePath) {
-      urlToUse = filePath;
+    // No usar rutas sin firmar para vista previa; requerir URL firmada o externa
+    if (!urlToUse) {
+      addToast({
+        type: 'error',
+        message: 'No se pudo acceder al archivo'
+      });
+      return;
     }
 
     if (!urlToUse) {
@@ -272,12 +276,17 @@ export function ViewDownloadButton({
               })(),
             }),
           });
-          let payload: any = null;
-          try { payload = await res.json(); } catch {}
+          type ApiPayload = {
+            success?: boolean;
+            error?: string | { message?: string; details?: unknown };
+            details?: unknown;
+          };
+          let payload: ApiPayload | null = null;
+          try { payload = await res.json() as ApiPayload; } catch {}
           if (res.ok && payload?.success) {
             addToast({ type: 'success', message: 'Lectura registrada' });
           } else {
-            const err = payload?.error || 'unknown_error';
+            const err = typeof payload?.error === 'string' ? payload.error : 'unknown_error';
             // Debug en consola para diagnóstico rápido
             console.debug('view-pdf response', { status: res.status, payload });
             if (res.status === 429) {
@@ -313,6 +322,7 @@ export function ViewDownloadButton({
       }
       // Intentar cargar la última página leída para reanudar
       try {
+        let ip: number | undefined = undefined;
         const { createClientComponentClient } = await import('@supabase/auth-helpers-nextjs');
         const supabase = createClientComponentClient();
         const { data: { user } } = await supabase.auth.getUser();
@@ -326,11 +336,23 @@ export function ViewDownloadButton({
             .limit(1)
             .maybeSingle();
           if (!rpError && rp && typeof rp.last_page === 'number') {
-            setInitialPage(rp.last_page);
-          } else {
-            setInitialPage(undefined);
+            ip = Math.max(1, rp.last_page as number);
           }
         }
+        // Fallback: si no hay registro en DB, intentar recuperar de localStorage
+        if (typeof ip !== 'number' && contentType && contentSlug && typeof window !== 'undefined') {
+          try {
+            const key = `reading-progress:${contentType}:${contentSlug}`;
+            const raw = window.localStorage.getItem(key);
+            if (raw) {
+              const obj = JSON.parse(raw);
+              if (typeof obj?.last_page === 'number') {
+                ip = Math.max(1, obj.last_page);
+              }
+            }
+          } catch {}
+        }
+        setInitialPage(ip);
       } catch (e) {
         // No impedir la apertura del visor si falla la consulta
         setInitialPage(undefined);
@@ -590,7 +612,7 @@ export function ViewDownloadButton({
         {/* PDF Viewer integrado */}
         {isPDFViewerOpen && (
           <PDFViewer
-            fileUrl={actualFileUrl || filePath || ''}
+            fileUrl={actualFileUrl || ''}
             fileName={getFileName()}
             onClose={() => setIsPDFViewerOpen(false)}
             initialPage={initialPage}
@@ -598,7 +620,7 @@ export function ViewDownloadButton({
               try {
                 // Normalizar filePath para registro estable
                 const normalizedPath = (() => {
-                  const src = actualFileUrl || filePath || '';
+                  const src = actualFileUrl || '';
                   if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
                     try {
                       const u = new URL(src);
@@ -627,6 +649,15 @@ export function ViewDownloadButton({
                     numPages: totalPages,
                   }),
                 });
+
+                // Guardar también en localStorage para restaurar aunque no haya sesión
+                try {
+                  if (contentType && contentSlug && typeof window !== 'undefined') {
+                    const key = `reading-progress:${contentType}:${contentSlug}`;
+                    const payload = { last_page: page, num_pages: totalPages, updated_at: new Date().toISOString() };
+                    window.localStorage.setItem(key, JSON.stringify(payload));
+                  }
+                } catch {}
               } catch (e) {
                 // no-op, no bloquear UI por errores de progreso
               }
