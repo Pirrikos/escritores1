@@ -3,13 +3,15 @@
 import Link from 'next/link';
 import { useEffect, Suspense, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { getSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { useCallback } from 'react';
 import PostsCarousel from '@/components/ui/PostsCarousel';
 import WorksCarousel from '@/components/ui/WorksCarousel';
 import ChaptersCarousel from '@/components/ui/ChaptersCarousel';
 import UsersCarousel from '@/components/ui/UsersCarousel';
 import { AppHeader } from '@/components/ui';
+import { ToastProvider } from '@/contexts/ToastContext';
+import ToastContainer from '@/components/ui/ToastContainer';
 import DailyQuoteBanner from '@/components/ui/DailyQuoteBanner';
 import { isAdminUser } from '@/lib/adminAuth';
 import dynamic from 'next/dynamic';
@@ -59,11 +61,12 @@ interface UserProfile {
   id: string;
   display_name: string | null;
   avatar_url?: string | null;
+  username?: string | null;
 }
 
 function HomePageContent() {
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseBrowserClient();
   const [session, setSession] = useState<any>(null);
 
   // Estados para los datos
@@ -167,51 +170,60 @@ function HomePageContent() {
   // Cargar autores seguidos por el usuario (requiere sesión)
   const loadFollowedUsers = useCallback(async () => {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
-      if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) {
         setFollowedUsers([]);
         return;
       }
-
-      const { data, error } = await supabase
-        .from('follows')
-        .select(`
-          following_id,
-          profiles:profiles!follows_following_id_fkey (id, display_name, avatar_url)
-        `)
-        .eq('follower_id', userId)
-        .limit(50);
-      if (error) throw error;
-
-      const normalized: UserProfile[] = (data || []).map((row: any) => {
-        const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-        return {
-          id: p?.id || row.following_id,
-          display_name: p?.display_name || null,
-          avatar_url: p?.avatar_url || null,
-        } as UserProfile;
-      });
+      // Paso 1: obtener IDs seguidos desde API de servidor
+      const idsRes = await fetch('/api/follows', { method: 'GET' });
+      if (!idsRes.ok) {
+        setFollowedUsers([]);
+        return;
+      }
+      const idsJson = await idsRes.json();
+      const ids: string[] = Array.isArray(idsJson?.ids) ? idsJson.ids : [];
+      if (!ids.length) {
+        setFollowedUsers([]);
+        return;
+      }
+      // Paso 2: cargar perfiles de esos IDs vía API
+      const profilesRes = await fetch(`/api/users?ids=${encodeURIComponent(ids.join(','))}`);
+      if (!profilesRes.ok) {
+        setFollowedUsers([]);
+        return;
+      }
+      const profJson = await profilesRes.json();
+      const rows = Array.isArray(profJson?.data) ? profJson.data : [];
+      const normalized: UserProfile[] = rows.map((p: any) => ({
+        id: p.id,
+        display_name: p.display_name || null,
+        avatar_url: p.avatar_url || null,
+        username: p.username || null,
+      }));
       setFollowedUsers(normalized);
     } catch (error) {
       // Silenciar errores de carga de autores seguidos
+      setFollowedUsers([]);
     }
   }, [supabase]);
 
   // Cargar perfiles (usuarios) para carrusel de avatares
   const loadUsers = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, display_name, avatar_url')
-        .order('display_name', { ascending: true })
-        .limit(30);
-      if (error) throw error;
-      setUsers(data || []);
+      const res = await fetch('/api/users?limit=30', { method: 'GET' });
+      if (!res.ok) {
+        setUsers([]);
+        return;
+      }
+      const json = await res.json();
+      const rows = Array.isArray(json?.data) ? json.data : [];
+      setUsers(rows);
     } catch (error) {
       // Silenciar errores de carga de perfiles en consola
+      setUsers([]);
     }
-  }, [supabase]);
+  }, []);
 
   // Función para cargar obras que tienen capítulos (no independientes)
   const loadWorksByChapters = useCallback(async () => {
@@ -602,7 +614,7 @@ function HomePageContent() {
 
             {/* Users Section */}
             <UsersCarousel
-              users={users}
+              users={users.filter(u => !followedUsers.some(f => f.id === u.id))}
               title="Autores"
               description="Miembros de la comunidad"
               className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
@@ -688,8 +700,11 @@ function LoadingFallback() {
 
 export default function HomePage() {
   return (
-    <Suspense fallback={<LoadingFallback />}>
-      <HomePageContent />
-    </Suspense>
+    <ToastProvider>
+      <ToastContainer />
+      <Suspense fallback={<LoadingFallback />}>
+        <HomePageContent />
+      </Suspense>
+    </ToastProvider>
   );
 }

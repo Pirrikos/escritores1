@@ -7,11 +7,12 @@ import { useToastHelpers } from '@/contexts/ToastContext';
 interface FollowButtonProps {
   targetUserId: string;
   className?: string;
+  initialFollowing?: boolean;
 }
 
-export const FollowButton: React.FC<FollowButtonProps> = ({ targetUserId, className }) => {
+export const FollowButton: React.FC<FollowButtonProps> = ({ targetUserId, className, initialFollowing }) => {
   const [loading, setLoading] = useState<boolean>(false);
-  const [following, setFollowing] = useState<boolean>(false);
+  const [following, setFollowing] = useState<boolean>(!!initialFollowing);
   const [isOwnProfile, setIsOwnProfile] = useState<boolean>(false);
   const { success, error } = useToastHelpers();
 
@@ -20,17 +21,25 @@ export const FollowButton: React.FC<FollowButtonProps> = ({ targetUserId, classN
       const me = await getCurrentUserId();
       setIsOwnProfile(!!me && me === targetUserId);
       if (!me || me === targetUserId) {
-        setFollowing(false);
+        // No forzar cambio de estado si no hay usuario aún o es el propio perfil
         return;
       }
       const f = await apiIsFollowing(targetUserId);
-      setFollowing(!!f);
+      // Evitar sobrescribir estado optimista tras un toggle reciente
+      setFollowing((prev) => prev || !!f);
     } catch {}
   }, [targetUserId]);
 
   useEffect(() => {
+    // Siempre sincronizar con servidor para evitar discrepancias entre navegadores
+    (async () => {
+      try {
+        const me = await getCurrentUserId();
+        setIsOwnProfile(!!me && me === targetUserId);
+      } catch {}
+    })();
     refreshStatus();
-  }, [refreshStatus]);
+  }, [refreshStatus, targetUserId]);
 
   const onToggle = async () => {
     setLoading(true);

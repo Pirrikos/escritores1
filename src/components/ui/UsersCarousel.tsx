@@ -3,11 +3,14 @@
 import React, { useRef } from 'react';
 import Link from 'next/link';
 import { Icon, Icons } from '@/components/ui';
+import { generateSlug } from '@/lib/slugUtils';
+import FollowButton from '@/components/ui/FollowButton';
 
 interface UserProfile {
   id: string;
   display_name: string | null;
   avatar_url?: string | null;
+  username?: string | null;
 }
 
 interface UsersCarouselProps {
@@ -99,34 +102,37 @@ export default function UsersCarousel({
                   : u.avatar_url)
               : null;
             return (
-              <Link key={u.id} href={`/usuario/${u.id}`} className="flex flex-col items-center text-center">
-                <div className="w-20 h-20 relative">
-                  {avatarSrc ? (
-                    <img
-                      src={avatarSrc}
-                      alt={`Avatar de ${name}`}
-                      className="w-20 h-20 rounded-full object-cover border border-slate-200"
-                      onError={(e) => {
-                        const el = e.currentTarget as HTMLImageElement;
-                        el.style.display = 'none';
-                        const next = el.nextElementSibling as HTMLElement | null;
-                        if (next) next.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  <div
-                    style={{ display: avatarSrc ? 'none' as const : 'flex' as const }}
-                    className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full items-center justify-center border border-slate-200"
-                  >
-                    <span className="text-white text-xl font-semibold">
-                      {name.charAt(0).toUpperCase()}
-                    </span>
+              <div key={u.id} className="flex flex-col items-center text-center">
+                <Link href={`/usuario/${u.username || generateSlug(u.display_name || '') || u.id}`} className="flex flex-col items-center text-center">
+                  <div className="w-20 h-20 relative">
+                    {avatarSrc ? (
+                      <img
+                        src={avatarSrc}
+                        alt={`Avatar de ${name}`}
+                        className="w-20 h-20 rounded-full object-cover border border-slate-200"
+                        onError={(e) => {
+                          const el = e.currentTarget as HTMLImageElement;
+                          el.style.display = 'none';
+                          const next = el.nextElementSibling as HTMLElement | null;
+                          if (next) next.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      style={{ display: avatarSrc ? 'none' as const : 'flex' as const }}
+                      className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full items-center justify-center border border-slate-200"
+                    >
+                      <span className="text-white text-xl font-semibold">
+                        {name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="mt-3">
-                  <p className="text-sm font-medium text-slate-800 truncate" title={name}>{name}</p>
-                </div>
-              </Link>
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-slate-800 truncate" title={name}>{name}</p>
+                  </div>
+                </Link>
+                <FollowButton targetUserId={u.id} className="mt-2" />
+              </div>
             );
           })}
         </div>

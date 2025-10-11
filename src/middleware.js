@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createIPRateLimiter } from './lib/rateLimiter.js';
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 
 // Crear rate limiter global para protección DDoS
 const globalIPRateLimiter = createIPRateLimiter({
@@ -38,8 +39,29 @@ export async function middleware(request) {
     }
   }
   
-  // Create response
+  // Create response (necesario para Supabase auth en middleware)
   const response = NextResponse.next();
+
+  // Protección de rutas: exigir sesión para páginas de usuario
+  if (pathname.startsWith('/usuario/')) {
+    try {
+      const supabase = createMiddlewareClient({ req: request, res: response });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/auth/login';
+        // preservar destino para volver después del login
+        url.searchParams.set('next', `${pathname}${request.nextUrl.search || ''}`);
+        return NextResponse.redirect(url);
+      }
+    } catch (error) {
+      // Si falla la verificación de sesión, redirigir a login por seguridad
+      const url = request.nextUrl.clone();
+      url.pathname = '/auth/login';
+      url.searchParams.set('next', `${pathname}${request.nextUrl.search || ''}`);
+      return NextResponse.redirect(url);
+    }
+  }
   
   // Add essential security headers
   response.headers.set('X-Content-Type-Options', 'nosniff');
