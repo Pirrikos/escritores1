@@ -5,6 +5,8 @@ import { logPdfView, normalizeBucketAndPath } from '@/lib/activityLogger';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import WorksCarousel from '@/components/ui/WorksCarousel';
 import { AppHeader } from '@/components/ui';
+import CommentsButton from '@/components/ui/CommentsButton';
+import CommentsPreview from '@/components/ui/CommentsPreview';
 import { generateSlug } from '@/lib/slugUtils';
 import dynamic from 'next/dynamic';
 const PDFViewer = dynamic(() => import('@/components/ui/PDFViewer'), { ssr: false });
@@ -325,6 +327,14 @@ export default function WorksByChaptersCatalogPage() {
                 description=""
                 showStats={false}
                 className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+                renderItemFooter={(w) => (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-start">
+                      <CommentsButton targetType="work" targetId={w.id} />
+                    </div>
+                    <CommentsPreview targetType="work" targetId={w.id} />
+                  </div>
+                )}
               />
             ) : (
               <div key={cat} className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60">

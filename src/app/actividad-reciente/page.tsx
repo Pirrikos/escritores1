@@ -96,7 +96,20 @@ export default function ActividadRecientePage() {
         const LIMIT = 20;
         const base = latest.slice(0, LIMIT);
 
-        const mapped = base.map(v => {
+        type ActivityItem = {
+          id: string;
+          when: string;
+          userId: string;
+          userName: string | null;
+          username?: string | null;
+          avatarUrl?: string | null;
+          type: "work" | "chapter";
+          slug: string;
+          title: string | null;
+          href: string;
+        };
+
+        const mapped: ActivityItem[] = base.map((v: any): ActivityItem => {
           const isWork = v.content_type === "work";
           const title = isWork
             ? workTitleBySlug.get(v.content_slug) ?? null
@@ -105,13 +118,13 @@ export default function ActividadRecientePage() {
           const p = profilesById.get(v.user_id) || { display_name: null, avatar_url: null, username: null };
           return {
             id: `${v.user_id}:${v.content_type}:${v.content_slug}:${v.created_at}`,
-            when: v.created_at,
-            userId: v.user_id,
+            when: typeof v.created_at === "string" ? v.created_at : new Date(v.created_at).toISOString(),
+            userId: String(v.user_id),
             userName: p.display_name ?? null,
             username: p.username ?? null,
             avatarUrl: p.avatar_url ?? null,
-            type: isWork ? "work" : "chapter",
-            slug: v.content_slug,
+            type: (isWork ? "work" : "chapter") as "work" | "chapter",
+            slug: String(v.content_slug),
             title,
             href,
           };

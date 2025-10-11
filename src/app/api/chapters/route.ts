@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabaseServer';
+import { randomUUID } from 'crypto';
 
 export async function GET(req: Request) {
   try {
@@ -13,7 +14,7 @@ export async function GET(req: Request) {
     if (process.env.NODE_ENV === 'development') {
       const now = new Date().toISOString();
       const data = Array.from({ length: limit }).map((_, i) => ({
-        id: `dev-chapter-${i + 1}`,
+        id: randomUUID(),
         title: `Capítulo de desarrollo #${i + 1}`,
         synopsis: 'Sinopsis de ejemplo para desarrollo.',
         author_id: `dev-author-${(i % 3) + 1}`,

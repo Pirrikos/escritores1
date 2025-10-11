@@ -10,6 +10,8 @@ import WorksCarousel from '@/components/ui/WorksCarousel';
 import ChaptersCarousel from '@/components/ui/ChaptersCarousel';
 import UsersCarousel from '@/components/ui/UsersCarousel';
 import { AppHeader } from '@/components/ui';
+import CommentsButton from '@/components/ui/CommentsButton';
+import CommentsPreview from '@/components/ui/CommentsPreview';
 import { ToastProvider } from '@/contexts/ToastContext';
 import ToastContainer from '@/components/ui/ToastContainer';
 import DailyQuoteBanner from '@/components/ui/DailyQuoteBanner';
@@ -640,6 +642,15 @@ function HomePageContent() {
               description="Libros y obras completas de nuestros autores"
               seeMoreHref="/works"
               className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+              renderItemFooter={(w) => (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-start">
+                    {/* Botón de comentarios por obra */}
+                    <CommentsButton targetType="work" targetId={w.id} />
+                  </div>
+                  <CommentsPreview targetType="work" targetId={w.id} />
+                </div>
+              )}
             />
 
             {/* Works by Chapters Section */}
@@ -649,6 +660,15 @@ function HomePageContent() {
               description="Obras serializadas por capítulos"
               seeMoreHref="/obras-por-capitulos"
               className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+              renderItemFooter={(w) => (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-start">
+                    {/* Comentarios a nivel de obra */}
+                    <CommentsButton targetType="work" targetId={w.id} />
+                  </div>
+                  <CommentsPreview targetType="work" targetId={w.id} />
+                </div>
+              )}
             />
 
             {/* Chapters Section */}
@@ -658,6 +678,15 @@ function HomePageContent() {
               description="Historias cortas y capítulos únicos"
               seeMoreHref="/chapters"
               className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200/60"
+              renderItemFooter={(c) => (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-start">
+                    {/* Botón de comentarios por capítulo */}
+                    <CommentsButton targetType="chapter" targetId={c.id} />
+                  </div>
+                  <CommentsPreview targetType="chapter" targetId={c.id} />
+                </div>
+              )}
             />
           </div>
         )}

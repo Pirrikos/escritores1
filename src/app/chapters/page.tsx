@@ -8,6 +8,8 @@ import { parsePreviewCover } from '@/lib/utils';
 import { Icon, Icons } from '@/components/ui/Icon';
 import { generateSlug } from '@/lib/slugUtils';
 import Image from 'next/image';
+import CommentsButton from '@/components/ui/CommentsButton';
+import CommentsPreview from '@/components/ui/CommentsPreview';
 
 interface Chapter {
   id: string;
@@ -279,6 +281,11 @@ export default function ChaptersPage() {
                           month: 'long',
                           day: 'numeric'
                         })}
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        <CommentsButton targetType="chapter" targetId={chapter.id} />
+                        <CommentsPreview targetType="chapter" targetId={chapter.id} />
                       </div>
                     </div>
                   </div>

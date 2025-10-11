@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabaseServer';
+import { randomUUID } from 'crypto';
 
 export async function GET(req: Request) {
   try {
@@ -11,11 +12,13 @@ export async function GET(req: Request) {
     if (process.env.NODE_ENV === 'development') {
       const now = new Date().toISOString();
       const data = Array.from({ length: limit }).map((_, i) => ({
-        id: `dev-work-${i + 1}`,
+        id: randomUUID(),
         title: `Obra de desarrollo #${i + 1}`,
         synopsis: 'Sinopsis de ejemplo para desarrollo.',
         author_id: `dev-author-${(i % 3) + 1}`,
         created_at: now,
+        // Añadimos slug para facilitar navegación en desarrollo
+        slug: `obra-desarrollo-${i + 1}`,
         cover_url: `preview:template-1:marino:${encodeURIComponent(`Obra #${i + 1}`)}:${encodeURIComponent(`Autor ${(i % 3) + 1}`)}`,
         profiles: {
           display_name: `Autor Dev ${(i % 3) + 1}`,
