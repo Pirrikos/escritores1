@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, Suspense } from "react";
 import dynamic from "next/dynamic";
 // imports limpiados tras extraer lógica al hook
 import { AppHeader } from "@/components/ui";
@@ -16,7 +16,9 @@ export default function MisLecturasPage() {
   return (
     <ToastProvider>
       <ToastContainer />
-      <MisLecturasPageContent />
+      <Suspense fallback={<div className="p-6 text-center">Cargando Mis lecturas…</div>}>
+        <MisLecturasPageContent />
+      </Suspense>
     </ToastProvider>
   );
 }
@@ -429,6 +431,7 @@ function MisLecturasPageContent() {
         <PDFViewer
           fileUrl={pdfUrl}
           fileName={currentTitle}
+          authorName={currentItem?.author}
           onClose={() => {
             try {
               if (pdfUrl && pdfUrl.startsWith('blob:')) {
