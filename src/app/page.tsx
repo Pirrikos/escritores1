@@ -12,6 +12,7 @@ import UsersCarousel from '@/components/ui/UsersCarousel';
 import { AppHeader } from '@/components/ui';
 import CommentsButton from '@/components/ui/CommentsButton';
 import CommentsPreview from '@/components/ui/CommentsPreview';
+import LikeButton from '@/components/ui/LikeButton';
 import { ToastProvider } from '@/contexts/ToastContext';
 import ToastContainer from '@/components/ui/ToastContainer';
 import DailyQuoteBanner from '@/components/ui/DailyQuoteBanner';
@@ -647,6 +648,7 @@ function HomePageContent() {
                   <div className="flex items-center justify-start">
                     {/* Botón de comentarios por obra */}
                     <CommentsButton targetType="work" targetId={w.id} />
+                    <LikeButton targetType="work" targetId={w.id} className="ml-2" />
                   </div>
                   <CommentsPreview targetType="work" targetId={w.id} />
                 </div>
@@ -665,6 +667,7 @@ function HomePageContent() {
                   <div className="flex items-center justify-start">
                     {/* Comentarios a nivel de obra */}
                     <CommentsButton targetType="work" targetId={w.id} />
+                    <LikeButton targetType="work" targetId={w.id} className="ml-2" />
                   </div>
                   <CommentsPreview targetType="work" targetId={w.id} />
                 </div>
@@ -683,6 +686,7 @@ function HomePageContent() {
                   <div className="flex items-center justify-start">
                     {/* Botón de comentarios por capítulo */}
                     <CommentsButton targetType="chapter" targetId={c.id} />
+                    <LikeButton targetType="chapter" targetId={c.id} className="ml-2" />
                   </div>
                   <CommentsPreview targetType="chapter" targetId={c.id} />
                 </div>

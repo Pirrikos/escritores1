@@ -11,7 +11,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "db:push": "supabase db push",
+    "db:push:debug": "supabase db push --debug",
+    "db:status": "node scripts/db-status.js"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",
@@ -38,7 +41,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
     "postcss": "^8.5.6",
-    "supabase": "^2.45.5",
+    "supabase": "^2.48.3",
     "tailwindcss": "^3.4.17",
     "typescript": "^5",
     "vitest": "^3.2.4"

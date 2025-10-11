@@ -62,6 +62,29 @@ Set repository secrets to run E2E in CI:
 
 The workflows read these via `${{ secrets.* }}` and run E2E against the built app.
 
+## Supabase Migrations (Docker-free)
+
+This project uses a Docker-free workflow with Supabase:
+
+- Author SQL migrations under `supabase/migrations/`.
+- Apply changes with `npx supabase db push` (no password prompts, non-interactive).
+- Do not use `supabase db pull` (it requires Docker for a shadow DB).
+- When you need to document or inspect schema, use Supabase Studio (SQL Editor) and export views or run inspection queries. See `docs/docker-free-workflow.md`.
+
+Recommended migration header (timeouts, no extensions):
+
+```
+SET lock_timeout = '5s';
+SET statement_timeout = '30s';
+-- Avoid CREATE EXTENSION; assume required extensions exist
+```
+
+Convenience scripts:
+
+- `npm run db:push` — aplica migraciones a Supabase.
+- `npm run db:push:debug` — lo mismo con salida detallada.
+- `npm run db:status` — muestra migraciones locales y aplicadas (usando `public.migration_log`).
+
 ## Vercel Deployment
 
 Add environment variables in your Vercel project settings:

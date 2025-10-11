@@ -1,8 +1,10 @@
 -- Migration: Create comments, comment_likes, and comment_reports with RLS
 -- Created: 2025-10-11
+SET lock_timeout='5s';
+SET statement_timeout='30s';
 
 -- Enable required extension for UUID (safe if already enabled)
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- Skipping CREATE EXTENSION per hard rules; assume pgcrypto exists
 
 -- 1) Create comments table
 CREATE TABLE IF NOT EXISTS public.comments (
@@ -19,14 +21,40 @@ CREATE TABLE IF NOT EXISTS public.comments (
 );
 
 -- Constraints for content quality
-ALTER TABLE public.comments
-  ADD CONSTRAINT comments_body_not_empty CHECK (trim(body) <> ''),
-  ADD CONSTRAINT comments_body_length CHECK (char_length(body) BETWEEN 1 AND 5000);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'comments_body_not_empty'
+      AND conrelid = 'public.comments'::regclass
+  ) THEN
+    ALTER TABLE public.comments
+      ADD CONSTRAINT comments_body_not_empty CHECK (trim(body) <> '');
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'comments_body_length'
+      AND conrelid = 'public.comments'::regclass
+  ) THEN
+    ALTER TABLE public.comments
+      ADD CONSTRAINT comments_body_length CHECK (char_length(body) BETWEEN 1 AND 5000);
+  END IF;
+END $$;
 
 -- Parent FK (self-reference) separate to avoid early failure if table is empty
-ALTER TABLE public.comments
-  ADD CONSTRAINT comments_parent_id_fkey FOREIGN KEY (parent_id)
-  REFERENCES public.comments(id) ON DELETE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'comments_parent_id_fkey'
+      AND conrelid = 'public.comments'::regclass
+  ) THEN
+    ALTER TABLE public.comments
+      ADD CONSTRAINT comments_parent_id_fkey FOREIGN KEY (parent_id)
+      REFERENCES public.comments(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 -- Helpful indexes
 CREATE INDEX IF NOT EXISTS idx_comments_target ON public.comments(target_type, target_id, created_at DESC);
@@ -69,8 +97,17 @@ CREATE TABLE IF NOT EXISTS public.comment_reports (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE public.comment_reports
-  ADD CONSTRAINT comment_reports_reason_length CHECK (reason IS NULL OR char_length(reason) BETWEEN 1 AND 500);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'comment_reports_reason_length'
+      AND conrelid = 'public.comment_reports'::regclass
+  ) THEN
+    ALTER TABLE public.comment_reports
+      ADD CONSTRAINT comment_reports_reason_length CHECK (reason IS NULL OR char_length(reason) BETWEEN 1 AND 500);
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_comment_reports_comment ON public.comment_reports(comment_id);
 CREATE INDEX IF NOT EXISTS idx_comment_reports_user ON public.comment_reports(user_id);

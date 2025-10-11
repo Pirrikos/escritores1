@@ -6,6 +6,7 @@ import WorksCarousel from '@/components/ui/WorksCarousel';
 import { AppHeader } from '@/components/ui';
 import CommentsButton from '@/components/ui/CommentsButton';
 import CommentsPreview from '@/components/ui/CommentsPreview';
+import LikeButton from '@/components/ui/LikeButton';
 
 interface Work {
   id: string;
@@ -160,6 +161,7 @@ export default function WorksPage() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-start">
                         <CommentsButton targetType="work" targetId={w.id} />
+                        <LikeButton targetType="work" targetId={w.id} className="ml-2" />
                       </div>
                       <CommentsPreview targetType="work" targetId={w.id} />
                     </div>

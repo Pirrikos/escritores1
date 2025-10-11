@@ -19,11 +19,26 @@ export async function GET(request) {
     const supabase = await getSupabaseRouteClient();
 
     // Obtener conteo de likes
-    const { data: countData, error: countError } = await supabase
-      .rpc('get_like_count', {
-        content_type: targetType,
-        content_id: targetId
+    // Try new signature first, then fallback to legacy
+    let countData, countError;
+    {
+      const res = await supabase.rpc('get_like_count', {
+        p_target_type: targetType,
+        p_target_id: targetId,
       });
+      countData = res.data;
+      countError = res.error;
+    }
+    if (countError) {
+      const legacy = await supabase.rpc('get_like_count', {
+        content_type: targetType,
+        content_id: targetId,
+      });
+      if (!legacy.error) {
+        countData = legacy.data;
+        countError = null;
+      }
+    }
 
     if (countError) {
       console.error('Error getting like count:', countError);
@@ -37,12 +52,28 @@ export async function GET(request) {
 
     // Si se proporciona userId, verificar si el usuario ha dado like
     if (userId) {
-      const { data: likedData, error: likedError } = await supabase
-        .rpc('user_has_liked', {
+      // Try new signature first, then fallback to legacy
+      let likedData, likedError;
+      {
+        const res = await supabase.rpc('user_has_liked', {
+          p_target_type: targetType,
+          p_target_id: targetId,
+          p_user_id: userId,
+        });
+        likedData = res.data;
+        likedError = res.error;
+      }
+      if (likedError) {
+        const legacy = await supabase.rpc('user_has_liked', {
           content_type: targetType,
           content_id: targetId,
-          user_uuid: userId
+          user_uuid: userId,
         });
+        if (!legacy.error) {
+          likedData = legacy.data;
+          likedError = null;
+        }
+      }
 
       if (likedError) {
         console.error('Error checking user like:', likedError);
@@ -149,11 +180,26 @@ export async function POST(request) {
     }
 
     // Obtener el nuevo conteo
-    const { data: countData, error: countError } = await supabase
-      .rpc('get_like_count', {
-        content_type: targetType,
-        content_id: targetId
+    // Try new signature first, then fallback to legacy
+    let countData, countError;
+    {
+      const res = await supabase.rpc('get_like_count', {
+        p_target_type: targetType,
+        p_target_id: targetId,
       });
+      countData = res.data;
+      countError = res.error;
+    }
+    if (countError) {
+      const legacy = await supabase.rpc('get_like_count', {
+        content_type: targetType,
+        content_id: targetId,
+      });
+      if (!legacy.error) {
+        countData = legacy.data;
+        countError = null;
+      }
+    }
 
     if (countError) {
       console.error('Error getting updated count:', countError);

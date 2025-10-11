@@ -7,6 +7,7 @@ import WorksCarousel from '@/components/ui/WorksCarousel';
 import { AppHeader } from '@/components/ui';
 import CommentsButton from '@/components/ui/CommentsButton';
 import CommentsPreview from '@/components/ui/CommentsPreview';
+import LikeButton from '@/components/ui/LikeButton';
 import { generateSlug } from '@/lib/slugUtils';
 import dynamic from 'next/dynamic';
 const PDFViewer = dynamic(() => import('@/components/ui/PDFViewer'), { ssr: false });
@@ -331,6 +332,7 @@ export default function WorksByChaptersCatalogPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-start">
                       <CommentsButton targetType="work" targetId={w.id} />
+                      <LikeButton targetType="work" targetId={w.id} className="ml-2" />
                     </div>
                     <CommentsPreview targetType="work" targetId={w.id} />
                   </div>
